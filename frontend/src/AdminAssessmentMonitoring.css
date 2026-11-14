@@ -1,0 +1,183 @@
+/* Main monitoring page */
+.admin-monitoring-page {
+    width: 100%;
+    padding: 10px 0;
+    color: #172033;
+}
+
+/* Header section */
+.monitoring-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 28px;
+}
+
+.monitoring-header h2 {
+    margin: 0 0 12px;
+    font-size: 28px;
+    font-weight: 600;
+    color: #f5f5f5;
+}
+
+.monitoring-header p {
+    margin: 0;
+    font-size: 18px;
+    color: #64748b;
+}
+
+/* Refresh button */
+.refresh-assessments-btn {
+    background: #7138e8;
+    color: white;
+    border: none;
+    border-radius: 9px;
+    padding: 14px 22px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.refresh-assessments-btn:hover {
+    background: #5d2bc4;
+}
+
+.refresh-assessments-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Assessment count */
+.assessment-count {
+    text-align: center;
+    margin: 25px 0;
+    font-size: 19px;
+    font-weight: 600;
+    color: #172033;
+}
+
+.assessment-count strong {
+    color: #7138e8;
+}
+
+/* Table wrapper */
+.assessment-table-container {
+    width: 100%;
+    overflow-x: auto;
+    background: white;
+    border-radius: 12px;
+    padding: 10px 0;
+    box-shadow: 0 5px 20px rgba(15, 23, 42, 0.05);
+}
+
+/* Assessment table */
+.assessment-monitoring-table {
+    width: 100%;
+    min-width: 1050px;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+/* Table header */
+.assessment-monitoring-table thead {
+    background: #f1f5f9;
+}
+
+.assessment-monitoring-table th {
+    padding: 20px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+}
+
+/* Table body */
+.assessment-monitoring-table td {
+    padding: 18px 16px;
+    font-size: 15px;
+    color: #172033;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.assessment-monitoring-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.assessment-monitoring-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Status labels */
+.assessment-status {
+    display: inline-block;
+    padding: 10px 15px;
+    border-radius: 25px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-completed {
+    color: #047857;
+    background: #d1fae5;
+}
+
+.status-started {
+    color: #92400e;
+    background: #fef3c7;
+}
+
+.status-cancelled {
+    color: #b91c1c;
+    background: #fee2e2;
+}
+
+.status-default {
+    color: #475569;
+    background: #e2e8f0;
+}
+
+/* Empty, loading and error messages */
+.table-message {
+    text-align: center;
+    padding: 35px !important;
+    color: #64748b !important;
+    font-size: 16px !important;
+}
+
+.monitoring-error {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+    .monitoring-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .monitoring-header h2 {
+        font-size: 23px;
+    }
+
+    .monitoring-header p {
+        font-size: 15px;
+    }
+
+    .refresh-assessments-btn {
+        width: 100%;
+    }
+
+    .assessment-count {
+        font-size: 17px;
+    }
+}

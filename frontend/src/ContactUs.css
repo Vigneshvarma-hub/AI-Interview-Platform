@@ -1,0 +1,141 @@
+
+/* Main Contact Us section */
+.contact-us {
+  padding: 64px 20px;
+  background: #f8fafc;
+  color: #172033;
+}
+
+/* Keep the form centered and responsive */
+.contact-us-container {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Heading section */
+.contact-us-heading {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.contact-us-label {
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.contact-us-heading h2 {
+  margin: 10px 0;
+  font-size: clamp(28px, 4vw, 38px);
+}
+
+.contact-us-heading p {
+  max-width: 540px;
+  margin: 0 auto;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+/* Form card */
+.contact-us-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 6%);
+}
+
+/* Individual form fields */
+.contact-us-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contact-us-field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.contact-us-field input,
+.contact-us-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.contact-us-field textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.contact-us-field input:focus,
+.contact-us-field textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 15%);
+}
+
+/* Submit button */
+.contact-us-submit {
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 9px;
+  background: #4f46e5;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.contact-us-submit:hover {
+  background: #4338ca;
+}
+
+.contact-us-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Success and error feedback */
+.contact-us-feedback {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.contact-us-feedback.success {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.contact-us-feedback.error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* Mobile layout */
+@media (max-width: 480px) {
+  .contact-us {
+    padding: 42px 14px;
+  }
+
+  .contact-us-form {
+    padding: 20px 16px;
+  }
+}
