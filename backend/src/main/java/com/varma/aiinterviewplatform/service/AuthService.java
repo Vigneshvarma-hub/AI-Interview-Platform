@@ -5,109 +5,156 @@ import com.varma.aiinterviewplatform.dto.AuthResponse;
 import com.varma.aiinterviewplatform.dto.LoginRequest;
 import com.varma.aiinterviewplatform.dto.RegisterRequest;
 import com.varma.aiinterviewplatform.entity.User;
+import com.varma.aiinterviewplatform.exception.LoginRateLimitException;
 import com.varma.aiinterviewplatform.repository.UserRepository;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.Locale;
+import java.util.Optional;
 
 @Service
 public class AuthService {
+
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_BCRYPT_PASSWORD_BYTES = 72;
+    private static final int MAX_NAME_LENGTH = 100;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailOtpService emailOtpService;
+    private final LoginRateLimitService loginRateLimitService;
 
-    // Constructor injection.
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            EmailOtpService emailOtpService) {
+            EmailOtpService emailOtpService,
+            LoginRateLimitService loginRateLimitService) {
 
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.emailOtpService = emailOtpService;
+        this.loginRateLimitService = loginRateLimitService;
     }
 
-    // Register a new user and send an email verification OTP.
+    // ---------------- REGISTRATION ----------------
+
+    @Transactional
     public User register(RegisterRequest request) {
 
-        // Normalize email to avoid duplicate accounts with different casing.
-        String email = request.getEmail().trim().toLowerCase();
+        if (request == null) {
+            throw new IllegalArgumentException(
+                    "Registration details are required."
+            );
+        }
 
-        // Check whether the email is already registered.
+        String name = request.getName() == null
+                ? ""
+                : request.getName().trim();
+
+        if (name.isBlank() || name.length() > MAX_NAME_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Name must contain between 1 and 100 characters."
+            );
+        }
+
+        String email = normalizeEmail(request.getEmail());
+
+        validatePassword(request.getPassword());
+
         if (userRepository.findByEmail(email).isPresent()) {
             throw new IllegalArgumentException(
                     "This email is already registered. Please log in."
             );
         }
 
-        // Validate password requirements.
-        validatePassword(request.getPassword());
-
-        // Create a new user.
         User user = new User();
 
-        user.setName(request.getName().trim());
+        user.setName(name);
         user.setEmail(email);
-
-        // Encrypt the password before storing it.
         user.setPassword(
                 passwordEncoder.encode(request.getPassword())
         );
 
-        // Set the default user role.
         user.setRole("USER");
-
-        // Newly registered accounts are active.
         user.setActive(true);
-
-        // Email must be verified before login.
         user.setEmailVerified(false);
 
-        // Save user details in the database.
-        User savedUser = userRepository.save(user);
+        // Preserve existing subscription defaults.
+        user.setSubscriptionPlan("FREE");
+        user.setTrialUsed(false);
 
-        // Generate and send OTP to the registered email.
+        User savedUser = userRepository.saveAndFlush(user);
+
         emailOtpService.sendVerificationOtp(email);
 
         return savedUser;
     }
 
-    // Validate password eligibility criteria.
-    private void validatePassword(String password) {
+    // ---------------- EMAIL NORMALIZATION ----------------
 
-        // Minimum 8 characters.
-        if (password == null || password.length() < 8) {
+    private String normalizeEmail(String email) {
+
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required.");
+        }
+
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    // ---------------- PASSWORD VALIDATION ----------------
+
+    public void validatePassword(String password) {
+
+        if (password == null
+                || password.length() < MIN_PASSWORD_LENGTH) {
+
             throw new IllegalArgumentException(
                     "Password must contain at least 8 characters."
             );
         }
 
-        // At least one uppercase letter.
+        int passwordBytes = password.getBytes(
+                StandardCharsets.UTF_8
+        ).length;
+
+        if (passwordBytes > MAX_BCRYPT_PASSWORD_BYTES) {
+            throw new IllegalArgumentException(
+                    "Password must not exceed 72 UTF-8 bytes."
+            );
+        }
+
         if (!password.matches(".*[A-Z].*")) {
             throw new IllegalArgumentException(
                     "Password must contain at least one uppercase letter."
             );
         }
 
-        // At least one lowercase letter.
         if (!password.matches(".*[a-z].*")) {
             throw new IllegalArgumentException(
                     "Password must contain at least one lowercase letter."
             );
         }
 
-        // At least one number.
         if (!password.matches(".*[0-9].*")) {
             throw new IllegalArgumentException(
                     "Password must contain at least one number."
             );
         }
 
-        // At least one special character.
         if (!password.matches(".*[^a-zA-Z0-9].*")) {
             throw new IllegalArgumentException(
                     "Password must contain at least one special character."
@@ -115,45 +162,100 @@ public class AuthService {
         }
     }
 
-    // Authenticate an existing user.
+    // ---------------- LOGIN ----------------
+
     public AuthResponse login(LoginRequest request) {
 
-        // Normalize email before searching.
-        String email = request.getEmail().trim().toLowerCase();
-
-        User user = userRepository
-                .findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found")
-                );
-
-        // Block login if the account is deactivated.
-        if (!Boolean.TRUE.equals(user.getActive())) {
-            throw new RuntimeException(
-                    "Your account has been deactivated. Please contact the administrator."
+        if (request == null) {
+            throw new IllegalArgumentException(
+                    "Invalid login request."
             );
         }
 
-        // Require email verification before login.
+        String email = normalizeEmail(request.getEmail());
+        String rawPassword = request.getPassword();
+
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Email or password is incorrect."
+            );
+        }
+
+        String emailIdentifier = hashIdentifier("EMAIL:" + email);
+
+        String ipIdentifier = hashIdentifier(
+                "IP:" + getClientIpAddress()
+        );
+
+        // Check email and IP lockouts independently.
+        boolean emailBlocked =
+                loginRateLimitService.isBlocked(
+                        "EMAIL", emailIdentifier
+                );
+
+        boolean ipBlocked =
+                loginRateLimitService.isBlocked(
+                        "IP", ipIdentifier
+                );
+
+        if (emailBlocked || ipBlocked) {
+            throw new LoginRateLimitException(
+                    "Too many failed login attempts. Please try again after 15 minutes."
+            );
+        }
+
+        Optional<User> optionalUser =
+                userRepository.findByEmail(email);
+
+        // Same response for unknown email and incorrect password.
+        if (optionalUser.isEmpty()) {
+
+            recordFailedLogin(emailIdentifier, ipIdentifier);
+
+            throw new IllegalArgumentException(
+                    "Email or password is incorrect."
+            );
+        }
+
+        User user = optionalUser.get();
+
+        // Check password before revealing account status.
+        if (user.getPassword() == null
+                || !passwordEncoder.matches(
+                rawPassword,
+                user.getPassword()
+        )) {
+
+            recordFailedLogin(emailIdentifier, ipIdentifier);
+
+            throw new IllegalArgumentException(
+                    "Email or password is incorrect."
+            );
+        }
+
+        if (!Boolean.TRUE.equals(user.getActive())) {
+            throw new IllegalArgumentException(
+                    "Your account has been deactivated. Please contact support."
+            );
+        }
+
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "Please verify your email before logging in."
             );
         }
 
-        // Verify the entered password.
-        if (!passwordEncoder.matches(
-                request.getPassword(),
-                user.getPassword()
-        )) {
-            throw new RuntimeException("Invalid password");
-        }
+        // Reset counters only after a successful login.
+        loginRateLimitService.resetAttempts(
+                "EMAIL", emailIdentifier
+        );
 
-        // Generate JWT token after successful authentication.
-        String token =
-                jwtService.generateToken(user.getEmail());
+        loginRateLimitService.resetAttempts(
+                "IP", ipIdentifier
+        );
 
-        // Return authentication response.
+        String token = jwtService.generateToken(user.getEmail());
+
         return new AuthResponse(
                 token,
                 user.getRole(),
@@ -161,5 +263,57 @@ public class AuthService {
                 user.getName(),
                 user.getEmail()
         );
+    }
+
+    // ---------------- FAILED LOGIN RECORDING ----------------
+
+    private void recordFailedLogin(
+            String emailIdentifier,
+            String ipIdentifier) {
+
+        loginRateLimitService.recordFailedAttempt(
+                "EMAIL", emailIdentifier
+        );
+
+        loginRateLimitService.recordFailedAttempt(
+                "IP", ipIdentifier
+        );
+    }
+
+    // ---------------- CLIENT IP ----------------
+
+    private String getClientIpAddress() {
+
+        if (RequestContextHolder.getRequestAttributes()
+                instanceof ServletRequestAttributes attributes) {
+
+            HttpServletRequest request = attributes.getRequest();
+
+            return request.getRemoteAddr();
+        }
+
+        return "UNKNOWN";
+    }
+
+    // ---------------- IDENTIFIER HASHING ----------------
+
+    private String hashIdentifier(String value) {
+
+        try {
+            MessageDigest digest =
+                    MessageDigest.getInstance("SHA-256");
+
+            byte[] hash = digest.digest(
+                    value.getBytes(StandardCharsets.UTF_8)
+            );
+
+            return HexFormat.of().formatHex(hash);
+
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(
+                    "Unable to process login security identifier.",
+                    exception
+            );
+        }
     }
 }

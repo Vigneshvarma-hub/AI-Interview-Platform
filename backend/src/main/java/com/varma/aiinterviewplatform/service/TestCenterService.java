@@ -1,4 +1,3 @@
-
 package com.varma.aiinterviewplatform.service;
 
 import com.varma.aiinterviewplatform.dto.TestCenterAnswerRequest;
@@ -26,6 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,11 +33,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.HashMap;
 
 @Service
 public class TestCenterService {
@@ -94,12 +94,9 @@ public class TestCenterService {
         String key = createPreparationKey(
                 email, technology, difficulty, questionCount);
 
-        // Read prepared questions without removing them from the cache yet.
-        // This allows a retry if the database transaction fails.
         List<Question> generatedQuestions =
                 preparationCache.getReadyQuestions(key);
 
-        // Save generated questions as snapshots for this test attempt.
         List<Question> selected =
                 questionRepository.saveAll(generatedQuestions);
 
@@ -119,7 +116,6 @@ public class TestCenterService {
 
         Interview saved = interviewRepository.save(test);
 
-        // Remove cached questions only after the database transaction commits.
         removePreparationCacheAfterCommit(key);
 
         List<TestQuestionResponse> questionResponses = new ArrayList<>();
@@ -153,6 +149,7 @@ public class TestCenterService {
                 selected.size(),
                 questionResponses);
     }
+
     /**
      * Save or update a draft answer.
      * Correct answers are not returned during the test.
@@ -195,7 +192,7 @@ public class TestCenterService {
         answer.setAnswerText(String.join(",", selected));
         answer.setMarkedForReview(request.isMarkedForReview());
 
-        // Do not grade or disclose correctness before final submission.
+        // Correct answers are evaluated only during final submission.
         answer.setScore(null);
         answer.setFeedback("Not evaluated yet");
 
@@ -228,13 +225,7 @@ public class TestCenterService {
                     "This test is not available for submission.");
         }
 
-        if (test.getExpiresAt() == null
-                || LocalDateTime.now().isAfter(test.getExpiresAt())) {
-            // Time expiry still permits finalization, but the test is closed.
-            test.setStatus("COMPLETED");
-        } else {
-            test.setStatus("COMPLETED");
-        }
+        test.setStatus("COMPLETED");
 
         List<Answer> answers = answerRepository.findByInterviewId(testId);
 
@@ -248,6 +239,7 @@ public class TestCenterService {
         int correctCount = 0;
 
         for (Question question : test.getQuestions()) {
+
             Answer answer = answerByQuestion.get(question.getId());
 
             if (answer == null) {
@@ -279,6 +271,7 @@ public class TestCenterService {
         }
 
         int totalQuestions = test.getQuestions().size();
+
         double percentage = totalQuestions == 0
                 ? 0.0
                 : round2(totalScore * 100.0 / totalQuestions);
@@ -286,6 +279,7 @@ public class TestCenterService {
         test.setScore(percentage);
         test.setCompletedAt(LocalDateTime.now());
         test.setStatus("COMPLETED");
+
         interviewRepository.save(test);
 
         return buildResult(test);
@@ -309,9 +303,13 @@ public class TestCenterService {
         return buildResult(test);
     }
 
+    /**
+     * Build the complete test result.
+     */
     private TestResultResponse buildResult(Interview test) {
 
         List<Question> questions = test.getQuestions();
+
         List<Answer> savedAnswers =
                 answerRepository.findByInterviewId(test.getId());
 
@@ -327,18 +325,23 @@ public class TestCenterService {
         double totalScore = 0.0;
 
         Map<String, double[]> topicTotals = new LinkedHashMap<>();
+
         List<TestQuestionAnalysisResponse> analysis = new ArrayList<>();
 
         for (Question q : questions) {
+
             Answer a = answerByQuestion.get(q.getId());
 
             List<String> selected = a == null
                     ? List.of()
                     : normalizeOptionsFromStoredAnswer(a.getAnswerText());
 
+            // Count only questions with a non-empty selected answer.
             boolean isAnswered = !selected.isEmpty();
+
             boolean isCorrect = isCorrectAnswer(q, selected);
             boolean marked = a != null && a.isMarkedForReview();
+
             double score = isCorrect ? 1.0 : 0.0;
 
             if (isAnswered) {
@@ -368,7 +371,9 @@ public class TestCenterService {
 
             String correctAnswer = "MSQ".equals(resolveQuestionType(q))
                     ? normalizeOptionsFromStoredAnswer(q.getCorrectOptions())
-                    .stream().sorted().collect(Collectors.joining(","))
+                    .stream()
+                    .sorted()
+                    .collect(Collectors.joining(","))
                     : safeOption(q.getCorrectOption());
 
             analysis.add(new TestQuestionAnalysisResponse(
@@ -399,25 +404,26 @@ public class TestCenterService {
                                 : round2(stat[0] * 100.0 / stat[1])));
 
         int total = questions.size();
+
         double percentage = total == 0
                 ? 0.0
                 : round2(totalScore * 100.0 / total);
 
-        Double average = interviewRepository.findAverageScoreByUserId(
-                test.getUser().getId());
+        // Average score from completed Test Center assessments only.
+        Double average =
+                interviewRepository
+                        .findAverageScoreByUserIdAndInterviewTypeIgnoreCaseAndStatusIgnoreCase(
+                                test.getUser().getId(),
+                                "TEST_CENTER",
+                                "COMPLETED");
 
-        // Highest completed Test Center percentage for this user.
-        List<Interview> completedTests =
-                interviewRepository.findByUser_EmailAndStatusOrderByIdDesc(
-                        test.getUser().getEmail(), "COMPLETED");
-
-        double highest = completedTests.stream()
-                .filter(i -> "TEST_CENTER".equalsIgnoreCase(i.getInterviewType()))
-                .map(Interview::getScore)
-                .filter(score -> score != null)
-                .mapToDouble(Double::doubleValue)
-                .max()
-                .orElse(0.0);
+        // Highest score from completed Test Center assessments only.
+        Double highest =
+                interviewRepository
+                        .findHighestScoreByUserIdAndInterviewTypeIgnoreCaseAndStatusIgnoreCase(
+                                test.getUser().getId(),
+                                "TEST_CENTER",
+                                "COMPLETED");
 
         return new TestResultResponse(
                 test.getId(),
@@ -433,7 +439,7 @@ public class TestCenterService {
                 totalScore,
                 percentage,
                 average == null ? 0.0 : round2(average),
-                round2(highest),
+                highest == null ? 0.0 : round2(highest),
                 topicScores,
                 analysis);
     }
@@ -447,6 +453,7 @@ public class TestCenterService {
         if (test.getUser() == null
                 || !test.getUser().getEmail().equalsIgnoreCase(email)
                 || !"TEST_CENTER".equalsIgnoreCase(test.getInterviewType())) {
+
             throw new IllegalArgumentException(
                     "Test not found for this user.");
         }
@@ -463,6 +470,7 @@ public class TestCenterService {
 
         if (test.getExpiresAt() == null
                 || LocalDateTime.now().isAfter(test.getExpiresAt())) {
+
             throw new IllegalArgumentException(
                     "Test time has expired. Please submit the test.");
         }
@@ -490,6 +498,7 @@ public class TestCenterService {
 
         if (q.getQuestionType() != null
                 && !q.getQuestionType().isBlank()) {
+
             return q.getQuestionType().trim().toUpperCase(Locale.ROOT);
         }
 
@@ -510,6 +519,7 @@ public class TestCenterService {
         Set<String> normalized = new LinkedHashSet<>();
 
         for (String option : options) {
+
             if (option == null || option.isBlank()) {
                 continue;
             }
@@ -547,8 +557,10 @@ public class TestCenterService {
                     "MCQ accepts only one selected option.");
         }
 
-        if ("MSQ".equals(type) && selected.size() > 0
+        if ("MSQ".equals(type)
+                && !selected.isEmpty()
                 && question.getCorrectOptions() == null) {
+
             throw new IllegalArgumentException(
                     "MSQ correct options are not configured.");
         }
@@ -565,9 +577,12 @@ public class TestCenterService {
         List<String> expected;
 
         if ("MSQ".equals(resolveQuestionType(question))) {
+
             expected = normalizeOptionsFromStoredAnswer(
                     question.getCorrectOptions());
+
         } else {
+
             expected = normalizeOptions(
                     List.of(question.getCorrectOption()));
         }
@@ -578,12 +593,15 @@ public class TestCenterService {
     }
 
     private String safeOption(String option) {
-        return option == null ? "" : option.trim().toUpperCase(Locale.ROOT);
+        return option == null
+                ? ""
+                : option.trim().toUpperCase(Locale.ROOT);
     }
 
     private double round2(double value) {
         return Math.round(value * 100.0) / 100.0;
     }
+
     /**
      * Begin background Gemini question preparation.
      */
@@ -594,24 +612,33 @@ public class TestCenterService {
         validatePreparationRequest(request);
 
         userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User not found."));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("User not found."));
 
         String technology = request.getTechnology().trim();
-        String difficulty = request.getDifficulty().trim()
-                .toUpperCase(Locale.ROOT);
-        int count = request.getQuestionCount() == null
-                ? 10 : request.getQuestionCount();
 
-        String key = createPreparationKey(email, technology, difficulty, count);
+        String difficulty = request.getDifficulty()
+                .trim()
+                .toUpperCase(Locale.ROOT);
+
+        int count = request.getQuestionCount() == null
+                ? 10
+                : request.getQuestionCount();
+
+        String key = createPreparationKey(
+                email, technology, difficulty, count);
 
         QuestionPreparationCache.PreparationEntry existing =
                 preparationCache.get(key);
 
         if (existing == null
-                || existing.getStatus() == QuestionPreparationCache.Status.FAILED) {
+                || existing.getStatus()
+                == QuestionPreparationCache.Status.FAILED) {
 
             preparationCache.create(key);
-            preparationWorker.generate(key, technology, difficulty, count);
+
+            preparationWorker.generate(
+                    key, technology, difficulty, count);
         }
 
         return preparationStatus(request, email);
@@ -627,21 +654,28 @@ public class TestCenterService {
         validatePreparationRequest(request);
 
         String technology = request.getTechnology().trim();
-        String difficulty = request.getDifficulty().trim()
-                .toUpperCase(Locale.ROOT);
-        int count = request.getQuestionCount() == null
-                ? 10 : request.getQuestionCount();
 
-        String key = createPreparationKey(email, technology, difficulty, count);
+        String difficulty = request.getDifficulty()
+                .trim()
+                .toUpperCase(Locale.ROOT);
+
+        int count = request.getQuestionCount() == null
+                ? 10
+                : request.getQuestionCount();
+
+        String key = createPreparationKey(
+                email, technology, difficulty, count);
 
         QuestionPreparationCache.PreparationEntry entry =
                 preparationCache.get(key);
 
         Map<String, Object> response = new HashMap<>();
 
-        response.put("status", entry == null
-                ? "NOT_STARTED"
-                : entry.getStatus().name());
+        response.put(
+                "status",
+                entry == null
+                        ? "NOT_STARTED"
+                        : entry.getStatus().name());
 
         response.put("technology", technology);
         response.put("difficulty", difficulty);
@@ -655,19 +689,23 @@ public class TestCenterService {
     }
 
     /**
-     * Keep prepared questions available if the current database transaction rolls back.
+     * Remove prepared questions only after the transaction commits.
      */
     private void removePreparationCacheAfterCommit(String key) {
+
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
+
             TransactionSynchronizationManager.registerSynchronization(
                     new TransactionSynchronization() {
+
                         @Override
                         public void afterCommit() {
                             preparationCache.remove(key);
                         }
                     });
+
         } else {
-            // Fallback for calls made without an active transaction.
+
             preparationCache.remove(key);
         }
     }
@@ -679,12 +717,14 @@ public class TestCenterService {
                 || request.getTechnology().isBlank()
                 || request.getDifficulty() == null
                 || request.getDifficulty().isBlank()) {
+
             throw new IllegalArgumentException(
                     "Subject and difficulty are required.");
         }
 
         int count = request.getQuestionCount() == null
-                ? 10 : request.getQuestionCount();
+                ? 10
+                : request.getQuestionCount();
 
         if (count < 1 || count > 50) {
             throw new IllegalArgumentException(
@@ -699,10 +739,14 @@ public class TestCenterService {
             int count) {
 
         try {
+
             String raw = email.toLowerCase(Locale.ROOT)
-                    + "|" + technology.toLowerCase(Locale.ROOT)
-                    + "|" + difficulty
-                    + "|" + count;
+                    + "|"
+                    + technology.toLowerCase(Locale.ROOT)
+                    + "|"
+                    + difficulty
+                    + "|"
+                    + count;
 
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(raw.getBytes(StandardCharsets.UTF_8));
@@ -710,8 +754,10 @@ public class TestCenterService {
             return HexFormat.of().formatHex(digest);
 
         } catch (NoSuchAlgorithmException exception) {
+
             throw new IllegalStateException(
-                    "Unable to create preparation key.", exception);
+                    "Unable to create preparation key.",
+                    exception);
         }
     }
 }

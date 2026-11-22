@@ -1,4 +1,3 @@
-
 package com.varma.aiinterviewplatform.filter;
 
 import com.varma.aiinterviewplatform.entity.User;
@@ -10,6 +9,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,9 +21,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Locale;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(JwtAuthFilter.class);
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
@@ -43,7 +49,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader("Authorization");
 
-        // No token: let Spring Security handle authentication.
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -52,7 +57,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7).trim();
 
         if (token.isBlank()) {
-            writeError(response, 401, "Authentication token is missing.");
+            SecurityContextHolder.clearContext();
+            writeError(response, 401,
+                    "Authentication token is missing.");
             return;
         }
 
@@ -68,22 +75,47 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             if (email == null || email.isBlank()) {
                 SecurityContextHolder.clearContext();
-                writeError(response, 401, "Invalid authentication token.");
+                writeError(response, 401,
+                        "Invalid authentication token.");
                 return;
             }
 
-            User user = userRepository.findByEmail(email).orElse(null);
+            User user = userRepository.findByEmail(email)
+                    .orElse(null);
 
             if (user == null) {
                 SecurityContextHolder.clearContext();
-                writeError(response, 401, "User account was not found.");
+                writeError(response, 401,
+                        "Authentication failed. Please log in again.");
+                return;
+            }
+
+            // Reject tokens issued before a password reset or
+            // another event that increments the user's token version.
+            long tokenVersion = jwtService.extractTokenVersion(token);
+
+            long currentTokenVersion = user.getTokenVersion() == null
+                    ? 0L
+                    : user.getTokenVersion();
+
+            if (tokenVersion != currentTokenVersion) {
+                SecurityContextHolder.clearContext();
+                writeError(response, 401,
+                        "Your session is no longer valid. Please log in again.");
                 return;
             }
 
             if (!Boolean.TRUE.equals(user.getActive())) {
                 SecurityContextHolder.clearContext();
                 writeError(response, 403,
-                        "Your account is deactivated. Please contact the administrator.");
+                        "Your account is deactivated.");
+                return;
+            }
+
+            if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+                SecurityContextHolder.clearContext();
+                writeError(response, 403,
+                        "Please verify your email before accessing this resource.");
                 return;
             }
 
@@ -92,15 +124,30 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (role == null || role.isBlank()) {
                 SecurityContextHolder.clearContext();
                 writeError(response, 403,
-                        "Your account does not have an assigned role.");
+                        "Your account does not have a valid role.");
                 return;
             }
 
-            String authority = role.startsWith("ROLE_")
-                    ? role
-                    : "ROLE_" + role;
+            String normalizedRole = role.trim()
+                    .toUpperCase(Locale.ROOT);
 
-            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (normalizedRole.startsWith("ROLE_")) {
+                normalizedRole = normalizedRole.substring(5);
+            }
+
+            if (!normalizedRole.equals("USER")
+                    && !normalizedRole.equals("ADMIN")) {
+
+                SecurityContextHolder.clearContext();
+                writeError(response, 403,
+                        "Your account does not have an authorized role.");
+                return;
+            }
+
+            String authority = "ROLE_" + normalizedRole;
+
+            if (SecurityContextHolder.getContext()
+                    .getAuthentication() == null) {
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
@@ -124,19 +171,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.clearContext();
 
-            System.err.println(
-                    "JWT authentication failed: "
-                            + exception.getClass().getSimpleName()
+            logger.warn(
+                    "JWT authentication failed for URI {}: {}",
+                    request.getRequestURI(),
+                    exception.getClass().getSimpleName()
             );
 
             if (!response.isCommitted()) {
                 writeError(response, 401,
                         "Authentication failed. Please log in again.");
             }
+
             return;
         }
 
-        // Important: execute the remaining security chain OUTSIDE the try-catch.
         filterChain.doFilter(request, response);
     }
 
@@ -148,6 +196,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         response.setStatus(status);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
+        response.setHeader("Cache-Control", "no-store");
 
         response.getWriter().write(
                 "{\"message\":\"" + message + "\"}"

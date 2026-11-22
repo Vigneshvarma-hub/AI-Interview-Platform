@@ -5,6 +5,7 @@ import com.varma.aiinterviewplatform.dto.AuthResponse;
 import com.varma.aiinterviewplatform.dto.LoginRequest;
 import com.varma.aiinterviewplatform.dto.RegisterRequest;
 import com.varma.aiinterviewplatform.entity.User;
+import com.varma.aiinterviewplatform.exception.LoginRateLimitException;
 import com.varma.aiinterviewplatform.service.AuthService;
 import com.varma.aiinterviewplatform.service.EmailOtpService;
 
@@ -35,28 +36,33 @@ public class AuthController {
         this.emailOtpService = emailOtpService;
     }
 
-    // Request DTO for email-based operations.
     public record EmailRequest(
-            @NotBlank @Email String email
+            @NotBlank @Email @Size(max = 254) String email
     ) {}
 
-    // Request DTO for reset OTP verification.
     public record VerifyResetOtpRequest(
-            @NotBlank @Email String email,
-            @NotBlank @Size(min = 6, max = 6) String otp
+            @NotBlank @Email @Size(max = 254) String email,
+            @NotBlank
+            @Size(min = 6, max = 6)
+            @jakarta.validation.constraints.Pattern(regexp = "[0-9]{6}")
+            String otp
     ) {}
 
-    // Request DTO for password reset.
     public record ResetPasswordRequest(
-            @NotBlank @Email String email,
-            @NotBlank @Size(min = 6, max = 6) String otp,
+            @NotBlank @Email @Size(max = 254) String email,
+            @NotBlank
+            @Size(min = 6, max = 6)
+            @jakarta.validation.constraints.Pattern(regexp = "[0-9]{6}")
+            String otp,
             @NotBlank @Size(min = 8, max = 72) String newPassword
     ) {}
 
-    // Register a new user and send email verification OTP.
+    // REGISTER
+
     @PostMapping("/register")
     public ResponseEntity<Map<String, String>> register(
-            @RequestBody RegisterRequest request) {
+            @Valid @RequestBody RegisterRequest request) {
+
         try {
             User user = authService.register(request);
 
@@ -66,11 +72,17 @@ public class AuthController {
                     "email",
                     user.getEmail()
             ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", ex.getMessage()));
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+
+        } catch (IllegalArgumentException exception) {
+
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", exception.getMessage())
+            );
+
+        } catch (Exception exception) {
+
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
                             "message",
                             "Registration failed. Please try again."
@@ -78,32 +90,62 @@ public class AuthController {
         }
     }
 
-    // Login an existing user.
+    // LOGIN
+
     @PostMapping("/login")
-    public AuthResponse login(@RequestBody LoginRequest request) {
-        return authService.login(request);
+    public ResponseEntity<?> login(
+            @Valid @RequestBody LoginRequest request) {
+
+        try {
+            AuthResponse response = authService.login(request);
+            return ResponseEntity.ok(response);
+
+        } catch (LoginRateLimitException exception) {
+
+            return ResponseEntity
+                    .status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of(
+                            "message",
+                            exception.getMessage()
+                    ));
+
+        } catch (IllegalArgumentException exception) {
+
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "message",
+                            exception.getMessage()
+                    ));
+        }
     }
 
-    // Request a password-reset OTP.
+    // FORGOT PASSWORD
+
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(
             @Valid @RequestBody EmailRequest request) {
+
+        String genericMessage =
+                "If an account exists for that email, a reset OTP has been sent.";
+
         try {
             emailOtpService.sendPasswordResetOtp(request.email());
 
-            return ResponseEntity.ok(Map.of(
-                    "message",
-                    "If an account exists for that email, a reset OTP has been sent."
-            ));
-        } catch (IllegalArgumentException ex) {
-            // Use the same public response to avoid exposing whether an
-            // email address belongs to an account.
-            return ResponseEntity.ok(Map.of(
-                    "message",
-                    "If an account exists for that email, a reset OTP has been sent."
-            ));
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            return ResponseEntity.ok(
+                    Map.of("message", genericMessage)
+            );
+
+        } catch (IllegalArgumentException exception) {
+
+            return ResponseEntity.ok(
+                    Map.of("message", genericMessage)
+            );
+
+        } catch (Exception exception) {
+
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
                             "message",
                             "Unable to process the request right now. Please try again later."
@@ -111,30 +153,36 @@ public class AuthController {
         }
     }
 
-    // Verify a password-reset OTP.
+    // VERIFY RESET OTP
+
     @PostMapping("/verify-reset-otp")
     public ResponseEntity<Map<String, String>> verifyResetOtp(
             @Valid @RequestBody VerifyResetOtpRequest request) {
+
         try {
             emailOtpService.verifyPasswordResetOtp(
                     request.email(),
                     request.otp()
             );
 
-            return ResponseEntity.ok(Map.of(
-                    "message",
-                    "OTP verified successfully."
-            ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", ex.getMessage()));
+            return ResponseEntity.ok(
+                    Map.of("message", "OTP verified successfully.")
+            );
+
+        } catch (IllegalArgumentException exception) {
+
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", exception.getMessage())
+            );
         }
     }
 
-    // Reset password after validating the reset OTP.
+    // RESET PASSWORD
+
     @PostMapping("/reset-password")
     public ResponseEntity<Map<String, String>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
+
         try {
             emailOtpService.resetPassword(
                     request.email(),
@@ -146,9 +194,12 @@ public class AuthController {
                     "message",
                     "Password reset successful. Please log in with your new password."
             ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", ex.getMessage()));
+
+        } catch (IllegalArgumentException exception) {
+
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", exception.getMessage())
+            );
         }
     }
 }

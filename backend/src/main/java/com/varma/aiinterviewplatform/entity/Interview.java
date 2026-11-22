@@ -1,6 +1,6 @@
-
 package com.varma.aiinterviewplatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -19,27 +19,28 @@ public class Interview {
     private String difficulty;
     private String status;
     private Double score;
-
-    // Existing interview category, such as AI.
-    @Column(name = "interview_type", length = 20)
     private String interviewType;
-
-    // Test Center timing fields.
-    // Existing interviews may leave these fields null.
-    @Column(name = "started_at")
     private LocalDateTime startedAt;
-
-    @Column(name = "expires_at")
     private LocalDateTime expiresAt;
-
-    @Column(name = "duration_minutes")
     private Integer durationMinutes;
-
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
+    private String conversationStage;
 
-    @ManyToOne
+    @Column(columnDefinition = "TEXT")
+    private String conversationHistory;
+
+    @Column(columnDefinition = "TEXT")
+    private String resumeAnalysis;
+
+    @Column(columnDefinition = "TEXT")
+    private String candidateFeedback;
+
+    private Integer feedbackRating;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
+    @JsonIgnore
     private User user;
 
     @ManyToMany(fetch = FetchType.EAGER)
@@ -53,129 +54,73 @@ public class Interview {
     public Interview() {
     }
 
-    // Preserve the existing constructor.
-    public Interview(
-            String technology,
-            String difficulty,
-            String status,
-            Double score,
-            User user) {
-
-        this.technology = technology;
-        this.difficulty = difficulty;
-        this.status = status;
-        this.score = score;
-        this.user = user;
-    }
-
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+        if (startedAt == null) {
+            startedAt = LocalDateTime.now();
+        }
     }
 
-    public Long getId() {
-        return id;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getTechnology() { return technology; }
+    public void setTechnology(String technology) { this.technology = technology; }
 
-    public String getTechnology() {
-        return technology;
-    }
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
 
-    public void setTechnology(String technology) {
-        this.technology = technology;
-    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
-    public String getDifficulty() {
-        return difficulty;
-    }
+    public Double getScore() { return score; }
+    public void setScore(Double score) { this.score = score; }
 
-    public void setDifficulty(String difficulty) {
-        this.difficulty = difficulty;
-    }
+    public String getInterviewType() { return interviewType; }
+    public void setInterviewType(String interviewType) { this.interviewType = interviewType; }
 
-    public String getStatus() {
-        return status;
-    }
+    public LocalDateTime getStartedAt() { return startedAt; }
+    public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+    public LocalDateTime getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
 
-    public Double getScore() {
-        return score;
-    }
+    public Integer getDurationMinutes() { return durationMinutes; }
+    public void setDurationMinutes(Integer durationMinutes) { this.durationMinutes = durationMinutes; }
 
-    public void setScore(Double score) {
-        this.score = score;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    public String getInterviewType() {
-        return interviewType;
-    }
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
 
-    public void setInterviewType(String interviewType) {
-        this.interviewType = interviewType;
-    }
+    public String getConversationStage() { return conversationStage; }
+    public void setConversationStage(String conversationStage) { this.conversationStage = conversationStage; }
 
-    public LocalDateTime getStartedAt() {
-        return startedAt;
-    }
+    @JsonIgnore
+    public String getConversationHistory() { return conversationHistory; }
+    public void setConversationHistory(String conversationHistory) { this.conversationHistory = conversationHistory; }
 
-    public void setStartedAt(LocalDateTime startedAt) {
-        this.startedAt = startedAt;
-    }
+    @JsonIgnore
+    public String getResumeAnalysis() { return resumeAnalysis; }
+    public void setResumeAnalysis(String resumeAnalysis) { this.resumeAnalysis = resumeAnalysis; }
 
-    public LocalDateTime getExpiresAt() {
-        return expiresAt;
-    }
+    @JsonIgnore
+    public String getCandidateFeedback() { return candidateFeedback; }
+    public void setCandidateFeedback(String candidateFeedback) { this.candidateFeedback = candidateFeedback; }
 
-    public void setExpiresAt(LocalDateTime expiresAt) {
-        this.expiresAt = expiresAt;
-    }
+    public Integer getFeedbackRating() { return feedbackRating; }
+    public void setFeedbackRating(Integer feedbackRating) { this.feedbackRating = feedbackRating; }
 
-    public Integer getDurationMinutes() {
-        return durationMinutes;
-    }
+    @JsonIgnore
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
-    public void setDurationMinutes(Integer durationMinutes) {
-        this.durationMinutes = durationMinutes;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getCompletedAt() {
-        return completedAt;
-    }
-
-    public void setCompletedAt(LocalDateTime completedAt) {
-        this.completedAt = completedAt;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
-    }
-
-    public List<Question> getQuestions() {
-        return questions;
-    }
-
+    public List<Question> getQuestions() { return questions; }
     public void setQuestions(List<Question> questions) {
-        this.questions = questions;
+        this.questions = questions == null ? new ArrayList<>() : questions;
     }
 }

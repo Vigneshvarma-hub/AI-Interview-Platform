@@ -27,8 +27,8 @@ public class Resume {
     private String extractedText;
 
     // Resume belongs to a particular user.
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
     // Default constructor required by JPA.

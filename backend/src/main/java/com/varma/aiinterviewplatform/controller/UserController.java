@@ -1,7 +1,9 @@
+
 package com.varma.aiinterviewplatform.controller;
 
-import com.varma.aiinterviewplatform.entity.User;
+import com.varma.aiinterviewplatform.dto.UserProfileResponse;
 import com.varma.aiinterviewplatform.service.UserService;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,10 +18,9 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public User getCurrentUser(Authentication authentication) {
+    public UserProfileResponse getCurrentUser(
+            Authentication authentication) {
+        return userService.getUserByEmail(authentication.getName());
 
-        String email = authentication.getName();
-
-        return userService.getUserByEmail(email);
     }
 }

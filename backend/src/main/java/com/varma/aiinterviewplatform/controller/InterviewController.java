@@ -1,16 +1,14 @@
 
 package com.varma.aiinterviewplatform.controller;
 
-import com.varma.aiinterviewplatform.dto.InterviewRequest;
-import com.varma.aiinterviewplatform.dto.InterviewQuestionResponse;
-import com.varma.aiinterviewplatform.dto.InterviewResultResponse;
 import com.varma.aiinterviewplatform.dto.InterviewHistoryResponse;
-
+import com.varma.aiinterviewplatform.dto.InterviewQuestionResponse;
+import com.varma.aiinterviewplatform.dto.InterviewRequest;
+import com.varma.aiinterviewplatform.dto.InterviewResultResponse;
 import com.varma.aiinterviewplatform.entity.Interview;
 import com.varma.aiinterviewplatform.entity.Question;
-
 import com.varma.aiinterviewplatform.service.InterviewService;
-
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,122 +20,126 @@ public class InterviewController {
 
     private final InterviewService interviewService;
 
-    // Constructor injection
     public InterviewController(InterviewService interviewService) {
         this.interviewService = interviewService;
     }
 
     // ----------------------------------------------------
-    // 1. Logged-in user's interviews
-    // GET /api/interviews/my
+    // GET LOGGED-IN USER'S INTERVIEWS
     // ----------------------------------------------------
+
     @GetMapping("/my")
-    public List<Interview> getMyInterviews(
+    public ResponseEntity<List<Interview>> getMyInterviews(
             Authentication authentication) {
 
-        String email = authentication.getName();
-
-        return interviewService.getMyInterviews(email);
+        return ResponseEntity.ok(
+                interviewService.getMyInterviews(authentication.getName()));
     }
 
     // ----------------------------------------------------
-    // 2. Interview questions
-    // GET /api/interviews/5/questions
+    // GET QUESTIONS FOR AN OWNED INTERVIEW
     // ----------------------------------------------------
+
     @GetMapping("/{interviewId}/questions")
-    public List<Question> getInterviewQuestions(
-            @PathVariable Long interviewId) {
-
-        return interviewService.getInterviewQuestions(interviewId);
-    }
-
-    // ----------------------------------------------------
-    // 3. Particular interview question
-    // GET /api/interviews/5/questions/1
-    // ----------------------------------------------------
-    @GetMapping("/{interviewId}/questions/{questionNumber}")
-    public InterviewQuestionResponse getQuestion(
+    public ResponseEntity<List<Question>> getInterviewQuestions(
             @PathVariable Long interviewId,
-            @PathVariable int questionNumber) {
+            Authentication authentication) {
 
-        return interviewService.getQuestion(
-                interviewId,
-                questionNumber
-        );
+        return ResponseEntity.ok(
+                interviewService.getInterviewQuestions(
+                        interviewId,
+                        authentication.getName()));
     }
 
     // ----------------------------------------------------
-    // 4. Regular AI interview start
-    // POST /api/interviews/start
+    // GET ONE QUESTION FOR AN OWNED INTERVIEW
     // ----------------------------------------------------
+
+    @GetMapping("/{interviewId}/questions/{questionNumber}")
+    public ResponseEntity<InterviewQuestionResponse> getQuestion(
+            @PathVariable Long interviewId,
+            @PathVariable int questionNumber,
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                interviewService.getQuestion(
+                        interviewId,
+                        questionNumber,
+                        authentication.getName()));
+    }
+
+    // ----------------------------------------------------
+    // START REGULAR INTERVIEW
+    // ----------------------------------------------------
+
     @PostMapping("/start")
-    public Interview startInterview(
+    public ResponseEntity<Interview> startInterview(
             @RequestBody InterviewRequest request,
             Authentication authentication) {
 
-        String email = authentication.getName();
-
-        return interviewService.startInterview(
-                request,
-                email
-        );
+        return ResponseEntity.ok(
+                interviewService.startInterview(
+                        request,
+                        authentication.getName()));
     }
 
     // ----------------------------------------------------
-    // 5. MCQ Assessment start
-    // POST /api/interviews/start-mcq?amount=5
+    // START MCQ INTERVIEW
     // ----------------------------------------------------
+
     @PostMapping("/start-mcq")
-    public Interview startMcqInterview(
+    public ResponseEntity<Interview> startMcqInterview(
             @RequestBody InterviewRequest request,
-            @RequestParam(defaultValue = "5") int amount,
+            @RequestParam(defaultValue = "10") int amount,
             Authentication authentication) {
 
-        String email = authentication.getName();
-
-        return interviewService.startMcqInterview(
-                request,
-                email,
-                amount
-        );
+        return ResponseEntity.ok(
+                interviewService.startMcqInterview(
+                        request,
+                        authentication.getName(),
+                        amount));
     }
 
     // ----------------------------------------------------
-    // 6. Interview complete
-    // POST /api/interviews/5/complete
+    // COMPLETE OWNED INTERVIEW
     // ----------------------------------------------------
+
     @PostMapping("/{interviewId}/complete")
-    public Interview completeInterview(
-            @PathVariable Long interviewId) {
-
-        return interviewService.completeInterview(
-                interviewId
-        );
-    }
-
-    // ----------------------------------------------------
-    // 7. Interview result
-    // GET /api/interviews/5/result
-    // ----------------------------------------------------
-    @GetMapping("/{interviewId}/result")
-    public InterviewResultResponse getInterviewResult(
-            @PathVariable Long interviewId) {
-
-        return interviewService.getInterviewResult(
-                interviewId
-        );
-    }
-
-    // ----------------------------------------------------
-    // 8. Assessment History
-    // GET /api/interviews/history
-    // ----------------------------------------------------
-    @GetMapping("/history")
-    public List<InterviewHistoryResponse> getMyInterviewHistory(
+    public ResponseEntity<Interview> completeInterview(
+            @PathVariable Long interviewId,
             Authentication authentication) {
 
-        String email = authentication.getName();
+        return ResponseEntity.ok(
+                interviewService.completeInterview(
+                        interviewId,
+                        authentication.getName()));
+    }
 
-        return interviewService.getMyInterviewHistory(email);
+    // ----------------------------------------------------
+    // GET OWNED INTERVIEW RESULT
+    // ----------------------------------------------------
+
+    @GetMapping("/{interviewId}/result")
+    public ResponseEntity<InterviewResultResponse> getInterviewResult(
+            @PathVariable Long interviewId,
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                interviewService.getInterviewResult(
+                        interviewId,
+                        authentication.getName()));
+    }
+
+    // ----------------------------------------------------
+    // GET LOGGED-IN USER'S INTERVIEW HISTORY
+    // ----------------------------------------------------
+
+    @GetMapping("/history")
+    public ResponseEntity<List<InterviewHistoryResponse>> getMyInterviewHistory(
+            Authentication authentication) {
+
+        return ResponseEntity.ok(
+                interviewService.getMyInterviewHistory(
+                        authentication.getName()));
     }
 }

@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.time.Duration;
 import java.util.List;
 
 @Configuration
@@ -40,6 +41,7 @@ public class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http
+                // JWT-based stateless authentication.
                 .csrf(csrf -> csrf.disable())
 
                 .cors(Customizer.withDefaults())
@@ -50,26 +52,30 @@ public class SecurityConfig {
                         )
                 )
 
-                // Missing or invalid authentication returns 401.
-                // Authenticated users without permission receive 403.
+                // Return 401 when authentication is missing.
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(
-                                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)
+                                new HttpStatusEntryPoint(
+                                        HttpStatus.UNAUTHORIZED
+                                )
                         )
                 )
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // Allow browser CORS preflight requests.
                         .requestMatchers(
                                 HttpMethod.OPTIONS, "/**"
                         ).permitAll()
 
+                        // Public chatbot and contact endpoints.
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/chatbot/message",
                                 "/api/contact"
                         ).permitAll()
 
+                        // Public authentication endpoints.
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/auth/register",
@@ -81,34 +87,31 @@ public class SecurityConfig {
                                 "/api/auth/email/resend"
                         ).permitAll()
 
+                        // Admin-only endpoints.
                         .requestMatchers("/api/admin/**")
                         .hasAuthority("ROLE_ADMIN")
 
-                        .requestMatchers("/api/skill-analysis/**")
-                        .hasAuthority("ROLE_USER")
-
-                        .requestMatchers("/api/ai-interviews/**")
-                        .hasAuthority("ROLE_USER")
-
-                        .requestMatchers("/api/mcq/**")
-                        .hasAuthority("ROLE_USER")
-
-                        .requestMatchers("/api/recommendations/**")
-                        .hasAuthority("ROLE_USER")
-
-                        // Test Center endpoints require a logged-in normal user.
-                        .requestMatchers("/api/test-center/**")
-                        .hasAuthority("ROLE_USER")
-
+                        // User-only application modules.
                         .requestMatchers(
                                 "/api/user/**",
-                                "/api/questions/**",
-                                "/api/answers/**",
                                 "/api/dashboard/**",
+                                "/api/interviews/**",
+                                "/api/ai-interviews/**",
+                                "/api/answers/**",
+                                "/api/questions/**",
+                                "/api/mcq/**",
+                                "/api/resumes/**",
+                                "/api/skill-analysis/**",
+                                "/api/skill-extraction/**",
                                 "/api/skill-gaps/**",
-                                "/api/resumes/**"
+                                "/api/skill-scores/**",
+                                "/api/recommendations/**",
+                                "/api/subscription/**",
+                                "/api/target-role/**",
+                                "/api/test-center/**"
                         ).hasAuthority("ROLE_USER")
 
+                        // Every other endpoint still requires authentication.
                         .anyRequest().authenticated()
                 )
 
@@ -143,8 +146,16 @@ public class SecurityConfig {
                 )
         );
 
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(
+                List.of(
+                        "Authorization",
+                        "Content-Type",
+                        "Accept"
+                )
+        );
+
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(Duration.ofMinutes(30));
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();

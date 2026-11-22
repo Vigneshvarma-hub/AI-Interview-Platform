@@ -1,4 +1,3 @@
-
 package com.varma.aiinterviewplatform.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -24,33 +23,28 @@ public class User {
 
     private String role;
 
-    // Existing account status.
     @Column(nullable = false, columnDefinition = "boolean default true")
     private Boolean active = true;
 
-    // Existing email-verification status.
-    @Column(nullable = false, columnDefinition = "boolean default true")
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean emailVerified = false;
 
-    // Subscription plan: FREE, TRIAL, or PREMIUM.
-    // New users start on the Free plan.
     @Column(nullable = false, columnDefinition = "varchar(20) default 'FREE'")
     private String subscriptionPlan = "FREE";
 
-    // Records whether the user has already used the free trial.
-    // This helps prevent repeated trials for the same account.
     @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean trialUsed = false;
 
-    // Trial start and expiry timestamps.
-    // These remain null until the user starts a trial.
     private LocalDateTime trialStartDate;
     private LocalDateTime trialEndDate;
 
-    // Paid subscription start and expiry timestamps.
-    // These remain null until a paid subscription is activated.
     private LocalDateTime subscriptionStartDate;
     private LocalDateTime subscriptionEndDate;
+
+    // Incremented whenever all existing login sessions must be invalidated.
+    @JsonIgnore
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private Long tokenVersion = 0L;
 
     public User() {
     }
@@ -60,17 +54,13 @@ public class User {
         this.email = email;
         this.password = password;
         this.role = role;
-
-        // Preserve existing account defaults.
         this.active = true;
         this.emailVerified = false;
-
-        // Initialize new users with no paid subscription or trial.
         this.subscriptionPlan = "FREE";
         this.trialUsed = false;
+        this.tokenVersion = 0L;
     }
 
-    // Existing user ID accessors.
     public Long getId() {
         return id;
     }
@@ -79,7 +69,6 @@ public class User {
         this.id = id;
     }
 
-    // Existing name accessors.
     public String getName() {
         return name;
     }
@@ -88,7 +77,6 @@ public class User {
         this.name = name;
     }
 
-    // Existing email accessors.
     public String getEmail() {
         return email;
     }
@@ -97,8 +85,6 @@ public class User {
         this.email = email;
     }
 
-    // Existing password accessors.
-    // @JsonIgnore prevents the password from being serialized in JSON.
     public String getPassword() {
         return password;
     }
@@ -107,7 +93,6 @@ public class User {
         this.password = password;
     }
 
-    // Existing role accessors.
     public String getRole() {
         return role;
     }
@@ -116,7 +101,6 @@ public class User {
         this.role = role;
     }
 
-    // Existing account-status accessors.
     public Boolean getActive() {
         return active;
     }
@@ -125,7 +109,6 @@ public class User {
         this.active = active;
     }
 
-    // Existing email-verification accessors.
     public Boolean getEmailVerified() {
         return emailVerified;
     }
@@ -134,7 +117,6 @@ public class User {
         this.emailVerified = emailVerified;
     }
 
-    // Subscription plan accessors.
     public String getSubscriptionPlan() {
         return subscriptionPlan;
     }
@@ -143,7 +125,6 @@ public class User {
         this.subscriptionPlan = subscriptionPlan;
     }
 
-    // Free-trial usage accessors.
     public Boolean getTrialUsed() {
         return trialUsed;
     }
@@ -152,7 +133,6 @@ public class User {
         this.trialUsed = trialUsed;
     }
 
-    // Trial start-time accessors.
     public LocalDateTime getTrialStartDate() {
         return trialStartDate;
     }
@@ -161,7 +141,6 @@ public class User {
         this.trialStartDate = trialStartDate;
     }
 
-    // Trial expiry-time accessors.
     public LocalDateTime getTrialEndDate() {
         return trialEndDate;
     }
@@ -170,7 +149,6 @@ public class User {
         this.trialEndDate = trialEndDate;
     }
 
-    // Paid subscription start-time accessors.
     public LocalDateTime getSubscriptionStartDate() {
         return subscriptionStartDate;
     }
@@ -179,12 +157,19 @@ public class User {
         this.subscriptionStartDate = subscriptionStartDate;
     }
 
-    // Paid subscription expiry-time accessors.
     public LocalDateTime getSubscriptionEndDate() {
         return subscriptionEndDate;
     }
 
     public void setSubscriptionEndDate(LocalDateTime subscriptionEndDate) {
         this.subscriptionEndDate = subscriptionEndDate;
+    }
+
+    public Long getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void setTokenVersion(Long tokenVersion) {
+        this.tokenVersion = tokenVersion;
     }
 }

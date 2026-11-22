@@ -1,40 +1,15 @@
+
 package com.varma.aiinterviewplatform.dto;
 
+/**
+ * Request used to start a resume-based AI mock interview.
+ *
+ * Technology and difficulty are selected automatically
+ * by AI after analyzing the candidate's uploaded resume.
+ */
 public class AiInterviewRequest {
 
-    // Technology selected by the candidate.
-    private String technology;
-
-    // Difficulty selected by the candidate.
-    private String difficulty;
-
-    // Default constructor required by Spring.
+    // Default constructor required for JSON deserialization.
     public AiInterviewRequest() {
-    }
-
-    // Constructor for creating a request with both values.
-    public AiInterviewRequest(String technology, String difficulty) {
-        this.technology = technology;
-        this.difficulty = difficulty;
-    }
-
-    // Getter for technology.
-    public String getTechnology() {
-        return technology;
-    }
-
-    // Setter for technology.
-    public void setTechnology(String technology) {
-        this.technology = technology;
-    }
-
-    // Getter for difficulty.
-    public String getDifficulty() {
-        return difficulty;
-    }
-
-    // Setter for difficulty.
-    public void setDifficulty(String difficulty) {
-        this.difficulty = difficulty;
     }
 }

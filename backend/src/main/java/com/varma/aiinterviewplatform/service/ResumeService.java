@@ -1,3 +1,4 @@
+
 package com.varma.aiinterviewplatform.service;
 
 import com.varma.aiinterviewplatform.entity.Resume;
@@ -7,221 +8,290 @@ import com.varma.aiinterviewplatform.repository.UserRepository;
 
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.AutoDetectParser;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.sax.BodyContentHandler;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.xml.sax.SAXException;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Locale;
+import java.util.UUID;
 
-// This service handles resume upload and text extraction.
 @Service
 public class ResumeService {
 
-    // Repository used to save and retrieve resume records.
     private final ResumeRepository resumeRepository;
-
-    // Repository used to find the logged-in user.
     private final UserRepository userRepository;
-
-    // Apache Tika is used to extract text from PDF/DOCX files.
     private final Tika tika;
 
-    // Folder where uploaded resumes will be stored.
-    private static final String UPLOAD_DIR =
-            "uploads/resumes";
+    // Resume storage directory.
+    @Value("${app.resume.storage-dir:uploads/resumes}")
+    private String uploadDir;
 
-    // Constructor injection for required dependencies.
+    // Maximum uploaded file size: 5 MB.
+    private static final long MAX_FILE_SIZE =
+            5L * 1024 * 1024;
+
+    // Maximum extracted resume text: 200,000 characters.
+    private static final int MAX_EXTRACTED_TEXT_CHARS =
+            200_000;
+
     public ResumeService(
             ResumeRepository resumeRepository,
             UserRepository userRepository) {
 
         this.resumeRepository = resumeRepository;
         this.userRepository = userRepository;
-
-        // Create Apache Tika parser.
         this.tika = new Tika();
     }
 
-
-    // Uploads a resume for the logged-in user.
-    // TikaException is declared because Apache Tika
-    // can throw this exception while extracting text.
+    // Upload and process a PDF or DOCX resume.
+    @Transactional
     public Resume uploadResume(
             MultipartFile file,
-            String email)
-            throws IOException, TikaException {
+            String email) throws IOException, TikaException {
 
-        // Validate that a file was actually selected.
+        // 1. Validate selected file.
         if (file == null || file.isEmpty()) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "Please select a resume file."
             );
         }
 
+        // 2. Validate file size.
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException(
+                    "Resume file must not exceed 5 MB."
+            );
+        }
 
-        // Get the original file name.
-        String originalFileName =
-                file.getOriginalFilename();
+        // 3. Validate original filename.
+        String originalFileName = file.getOriginalFilename();
 
-
-        // Validate file name.
-        if (originalFileName == null
-                || originalFileName.isBlank()) {
-
-            throw new RuntimeException(
+        if (originalFileName == null || originalFileName.isBlank()) {
+            throw new IllegalArgumentException(
                     "Invalid resume file name."
             );
         }
 
+        String safeFileName = Paths.get(originalFileName)
+                .getFileName()
+                .toString();
 
-        // Convert file name to lowercase
-        // for extension checking.
         String lowerCaseFileName =
-                originalFileName.toLowerCase();
+                safeFileName.toLowerCase(Locale.ROOT);
 
+        boolean isPdf = lowerCaseFileName.endsWith(".pdf");
+        boolean isDocx = lowerCaseFileName.endsWith(".docx");
 
-        // Only PDF and DOCX files are allowed.
-        if (!lowerCaseFileName.endsWith(".pdf")
-                && !lowerCaseFileName.endsWith(".docx")) {
-
-            throw new RuntimeException(
+        if (!isPdf && !isDocx) {
+            throw new IllegalArgumentException(
                     "Only PDF and DOCX resume files are allowed."
             );
         }
 
+        // 4. Read file bytes and detect actual content.
+        byte[] fileBytes = file.getBytes();
 
-        // Find the logged-in user using JWT email.
-        User user = userRepository
-                .findByEmail(email)
+        String detectedType = tika.detect(fileBytes);
+
+        boolean validPdf =
+                isPdf &&
+                        "application/pdf".equalsIgnoreCase(detectedType);
+
+        boolean validDocx =
+                isDocx &&
+                        (
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        .equalsIgnoreCase(detectedType)
+                                        ||
+                                        "application/x-tika-ooxml"
+                                                .equalsIgnoreCase(detectedType)
+                        );
+
+        if (!validPdf && !validDocx) {
+            throw new IllegalArgumentException(
+                    "File content does not match a valid PDF or DOCX resume."
+            );
+        }
+
+        // 5. Extract text with a character limit.
+        String extractedText = extractResumeText(fileBytes);
+
+        if (extractedText == null || extractedText.isBlank()) {
+            throw new IllegalArgumentException(
+                    "No readable text found in the resume. "
+                            + "Please upload a text-based PDF or DOCX file."
+            );
+        }
+
+        // 6. Find authenticated user.
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Please log in to upload your resume."
+            );
+        }
+
+        String normalizedEmail =
+                email.trim().toLowerCase(Locale.ROOT);
+
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() ->
-                        new RuntimeException(
-                                "User not found"
-                        )
+                        new IllegalArgumentException("User not found.")
                 );
 
+        // 7. Create storage directory.
+        Path uploadPath = Paths.get(uploadDir)
+                .toAbsolutePath()
+                .normalize();
 
-        // Create upload directory if it does not exist.
-        Path uploadPath =
-                Paths.get(UPLOAD_DIR);
+        Files.createDirectories(uploadPath);
 
-        Files.createDirectories(
-                uploadPath
-        );
+        // 8. Generate unique filename.
+        String extension = isPdf ? ".pdf" : ".docx";
 
-
-        // Create a unique file name.
-        // This avoids conflicts when multiple users
-        // upload files with the same name.
         String storedFileName =
-                System.currentTimeMillis()
-                        + "_"
-                        + originalFileName;
+                UUID.randomUUID() + extension;
 
+        Path filePath = uploadPath.resolve(storedFileName)
+                .normalize();
 
-        // Create the complete file path.
-        Path filePath =
-                uploadPath.resolve(
-                        storedFileName
-                );
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException(
+                    "Invalid resume storage path."
+            );
+        }
 
-
-        // Save the uploaded file to disk.
+        // 9. Store uploaded file.
         Files.copy(
-                file.getInputStream(),
+                new ByteArrayInputStream(fileBytes),
                 filePath
         );
 
+        try {
 
-        // Use Apache Tika to extract text
-        // from the uploaded PDF/DOCX file.
-        String extractedText =
-                tika.parseToString(
-                        filePath.toFile()
-                );
+            // 10. Find existing resume for this user.
+            Resume resume = resumeRepository
+                    .findByUser_Email(normalizedEmail)
+                    .orElse(null);
 
+            String oldFilePath =
+                    resume != null ? resume.getFilePath() : null;
 
-        // Check whether this user already has a resume.
-        Resume resume =
-                resumeRepository
-                        .findByUser_Email(email)
-                        .orElse(null);
+            if (resume == null) {
+                resume = new Resume();
+            }
 
+            // 11. Update resume details.
+            resume.setFileName(safeFileName);
 
-        // If an old resume exists,
-        // update it instead of creating duplicates.
-        if (resume != null) {
+            resume.setFileType(
+                    validPdf
+                            ? "application/pdf"
+                            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            );
 
-            // Delete the previous physical file
-            // if it exists.
-            if (resume.getFilePath() != null) {
+            resume.setFilePath(filePath.toString());
+            resume.setExtractedText(extractedText);
+            resume.setUser(user);
+
+            // 12. Save database record.
+            Resume savedResume = resumeRepository.save(resume);
+
+            // 13. Delete old file after new record is saved.
+            if (oldFilePath != null
+                    && !oldFilePath.isBlank()
+                    && !oldFilePath.equals(filePath.toString())) {
 
                 try {
-
-                    Files.deleteIfExists(
-                            Paths.get(
-                                    resume.getFilePath()
-                            )
-                    );
-
-                } catch (Exception ignored) {
-                    // Ignore deletion failure.
+                    Files.deleteIfExists(Paths.get(oldFilePath));
+                } catch (IOException ignored) {
+                    // Old-file cleanup can be handled separately.
                 }
             }
 
-        } else {
+            return savedResume;
 
-            // Create a new Resume entity.
-            resume = new Resume();
+        } catch (RuntimeException exception) {
+
+            // Remove new file if database processing fails.
+            try {
+                Files.deleteIfExists(filePath);
+            } catch (IOException ignored) {
+                // Preserve original exception.
+            }
+
+            throw exception;
         }
-
-
-        // Store original file name.
-        resume.setFileName(
-                originalFileName
-        );
-
-
-        // Store uploaded file type.
-        resume.setFileType(
-                file.getContentType()
-        );
-
-
-        // Store physical file location.
-        resume.setFilePath(
-                filePath.toString()
-        );
-
-
-        // Store extracted resume text.
-        resume.setExtractedText(
-                extractedText
-        );
-
-
-        // Connect resume with the logged-in user.
-        resume.setUser(user);
-
-
-        // Save resume information in PostgreSQL.
-        return resumeRepository.save(
-                resume
-        );
     }
 
+    // Extract resume text with Apache Tika and a write limit.
+    private String extractResumeText(byte[] fileBytes)
+            throws IOException, TikaException {
 
-    // Returns the logged-in user's resume.
-    public Resume getMyResume(
-            String email) {
+        BodyContentHandler handler =
+                new BodyContentHandler(MAX_EXTRACTED_TEXT_CHARS);
+
+        AutoDetectParser parser = new AutoDetectParser();
+
+        try (ByteArrayInputStream input =
+                     new ByteArrayInputStream(fileBytes)) {
+
+            parser.parse(
+                    input,
+                    handler,
+                    new Metadata(),
+                    new ParseContext()
+            );
+
+        } catch (SAXException exception) {
+
+            if (handler.toString().length()
+                    >= MAX_EXTRACTED_TEXT_CHARS) {
+
+                throw new IllegalArgumentException(
+                        "Resume contains too much text. "
+                                + "Please upload a shorter resume."
+                );
+            }
+
+            throw new TikaException(
+                    "Unable to extract resume text.",
+                    exception
+            );
+        }
+
+        return handler.toString();
+    }
+
+    // Retrieve authenticated user's resume.
+    @Transactional(readOnly = true)
+    public Resume getMyResume(String email) {
+
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Please log in to access your resume."
+            );
+        }
 
         return resumeRepository
-                .findByUser_Email(email)
+                .findByUser_Email(
+                        email.trim().toLowerCase(Locale.ROOT)
+                )
                 .orElseThrow(() ->
-                        new RuntimeException(
-                                "Resume not found"
+                        new IllegalArgumentException(
+                                "Resume not found. Please upload your resume."
                         )
                 );
     }

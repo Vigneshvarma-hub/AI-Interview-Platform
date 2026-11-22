@@ -1,4 +1,3 @@
-
 package com.varma.aiinterviewplatform.entity;
 
 import jakarta.persistence.*;
@@ -20,50 +19,53 @@ public class EmailOtp {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Email address for which the OTP is generated.
     @Column(nullable = false)
     private String email;
 
-    // OTP code sent to the user's email.
+    // Store only the BCrypt hash of the OTP.
     @Column(nullable = false)
     private String otp;
 
-    // Time after which the OTP becomes invalid.
     @Column(nullable = false)
     private LocalDateTime expiryTime;
 
-    // Identifies the OTP's purpose so separate flows do not interfere.
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private Purpose purpose = Purpose.EMAIL_VERIFICATION;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int attempts = 0;
+
+    @Column(name = "last_sent_at")
+    private LocalDateTime lastSentAt;
 
     public enum Purpose {
         EMAIL_VERIFICATION,
         PASSWORD_RESET
     }
 
-    // Default constructor required by JPA.
     public EmailOtp() {
     }
 
-    // Preserve compatibility with existing registration OTP code.
     public EmailOtp(String email, String otp, LocalDateTime expiryTime) {
         this.email = email;
         this.otp = otp;
         this.expiryTime = expiryTime;
         this.purpose = Purpose.EMAIL_VERIFICATION;
+        this.attempts = 0;
     }
 
-    // Constructor for OTP records with an explicit purpose.
     public EmailOtp(
             String email,
             String otp,
             LocalDateTime expiryTime,
-            Purpose purpose) {
+            Purpose purpose
+    ) {
         this.email = email;
         this.otp = otp;
         this.expiryTime = expiryTime;
         this.purpose = purpose;
+        this.attempts = 0;
     }
 
     public Long getId() {
@@ -104,5 +106,21 @@ public class EmailOtp {
 
     public void setPurpose(Purpose purpose) {
         this.purpose = purpose;
+    }
+
+    public int getAttempts() {
+        return attempts;
+    }
+
+    public void setAttempts(int attempts) {
+        this.attempts = attempts;
+    }
+
+    public LocalDateTime getLastSentAt() {
+        return lastSentAt;
+    }
+
+    public void setLastSentAt(LocalDateTime lastSentAt) {
+        this.lastSentAt = lastSentAt;
     }
 }

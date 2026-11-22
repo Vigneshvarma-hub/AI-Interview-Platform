@@ -1,22 +1,22 @@
 
 package com.varma.aiinterviewplatform.service;
 
-import com.varma.aiinterviewplatform.dto.InterviewRequest;
-import com.varma.aiinterviewplatform.dto.InterviewQuestionResponse;
-import com.varma.aiinterviewplatform.dto.InterviewResultResponse;
 import com.varma.aiinterviewplatform.dto.InterviewHistoryResponse;
-
+import com.varma.aiinterviewplatform.dto.InterviewQuestionResponse;
+import com.varma.aiinterviewplatform.dto.InterviewRequest;
+import com.varma.aiinterviewplatform.dto.InterviewResultResponse;
 import com.varma.aiinterviewplatform.entity.Answer;
 import com.varma.aiinterviewplatform.entity.Interview;
 import com.varma.aiinterviewplatform.entity.Question;
 import com.varma.aiinterviewplatform.entity.User;
-
 import com.varma.aiinterviewplatform.repository.InterviewRepository;
 import com.varma.aiinterviewplatform.repository.QuestionRepository;
 import com.varma.aiinterviewplatform.repository.UserRepository;
-
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -28,7 +28,6 @@ public class InterviewService {
     private final QuestionRepository questionRepository;
     private final AnswerService answerService;
 
-    // Constructor injection for required repositories and services.
     public InterviewService(
             InterviewRepository interviewRepository,
             UserRepository userRepository,
@@ -41,34 +40,63 @@ public class InterviewService {
         this.answerService = answerService;
     }
 
-    // Retrieve all questions assigned to an interview.
-    public List<Question> getInterviewQuestions(Long interviewId) {
+    // ----------------------------------------------------
+    // OWNERSHIP VALIDATION
+    // ----------------------------------------------------
 
-        Interview interview = interviewRepository.findById(interviewId)
+    private Interview requireOwnedInterview(Long interviewId, String email) {
+
+        if (interviewId == null || email == null || email.isBlank()) {
+            throw new AccessDeniedException("Authentication is required.");
+        }
+
+        return interviewRepository
+                .findByIdAndUser_Email(
+                        interviewId,
+                        email.trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() ->
-                        new RuntimeException("Interview not found"));
+                        new AccessDeniedException(
+                                "Interview not found or access denied."));
+    }
+
+    // ----------------------------------------------------
+    // GET INTERVIEW QUESTIONS - OWNER ONLY
+    // ----------------------------------------------------
+
+    @Transactional(readOnly = true)
+    public List<Question> getInterviewQuestions(
+            Long interviewId,
+            String email) {
+
+        Interview interview =
+                requireOwnedInterview(interviewId, email);
 
         return interview.getQuestions();
     }
 
-    // Retrieve one question by its position in the interview.
+    // ----------------------------------------------------
+    // GET ONE QUESTION - OWNER ONLY
+    // ----------------------------------------------------
+
+    @Transactional(readOnly = true)
     public InterviewQuestionResponse getQuestion(
             Long interviewId,
-            int questionNumber) {
+            int questionNumber,
+            String email) {
 
-        Interview interview = interviewRepository.findById(interviewId)
-                .orElseThrow(() ->
-                        new RuntimeException("Interview not found"));
+        Interview interview =
+                requireOwnedInterview(interviewId, email);
 
         List<Question> questions = interview.getQuestions();
 
         if (questions == null || questions.isEmpty()) {
-            throw new RuntimeException(
-                    "No questions assigned to this interview");
+            throw new IllegalArgumentException(
+                    "No questions assigned to this interview.");
         }
 
         if (questionNumber < 1 || questionNumber > questions.size()) {
-            throw new RuntimeException("Invalid question number");
+            throw new IllegalArgumentException(
+                    "Invalid question number.");
         }
 
         Question question = questions.get(questionNumber - 1);
@@ -84,23 +112,29 @@ public class InterviewService {
         );
     }
 
-    // Start a regular interview for the requested technology and difficulty.
+    // ----------------------------------------------------
+    // START REGULAR INTERVIEW
+    // ----------------------------------------------------
+
+    @Transactional
     public Interview startInterview(
             InterviewRequest request,
             String email) {
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
-
-        // Validate the request and retrieve matching questions.
-        if (request.getTechnology() == null
+        if (request == null
+                || request.getTechnology() == null
                 || request.getTechnology().isBlank()
                 || request.getDifficulty() == null
                 || request.getDifficulty().isBlank()) {
+
             throw new IllegalArgumentException(
-                    "Technology and difficulty are required");
+                    "Technology and difficulty are required.");
         }
+
+        User user = userRepository.findByEmail(
+                        email.trim().toLowerCase(Locale.ROOT))
+                .orElseThrow(() ->
+                        new IllegalArgumentException("User not found."));
 
         List<Question> questions =
                 questionRepository.findMatchingQuestions(
@@ -109,14 +143,10 @@ public class InterviewService {
                                 .toUpperCase(Locale.ROOT));
 
         if (questions == null || questions.isEmpty()) {
-            throw new RuntimeException(
-                    "No questions available for technology: "
-                            + request.getTechnology()
-                            + " and difficulty: "
-                            + request.getDifficulty());
+            throw new IllegalArgumentException(
+                    "No questions available for the selected technology and difficulty.");
         }
 
-        // Limit a regular interview to five questions.
         int questionCount = Math.min(questions.size(), 5);
 
         List<Question> selectedQuestions =
@@ -135,7 +165,11 @@ public class InterviewService {
         return interviewRepository.save(interview);
     }
 
-    // Start an MCQ assessment with a requested number of questions.
+    // ----------------------------------------------------
+    // START MCQ INTERVIEW
+    // ----------------------------------------------------
+
+    @Transactional
     public Interview startMcqInterview(
             InterviewRequest request,
             String email,
@@ -143,33 +177,33 @@ public class InterviewService {
 
         if (amount < 1 || amount > 20) {
             throw new IllegalArgumentException(
-                    "Number of questions must be between 1 and 20");
+                    "Number of questions must be between 1 and 20.");
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
-
-        // Validate the technology and difficulty before querying.
-        if (request.getTechnology() == null
+        if (request == null
+                || request.getTechnology() == null
                 || request.getTechnology().isBlank()
                 || request.getDifficulty() == null
                 || request.getDifficulty().isBlank()) {
+
             throw new IllegalArgumentException(
-                    "Technology and difficulty are required");
+                    "Technology and difficulty are required.");
         }
+
+        User user = userRepository.findByEmail(
+                        email.trim().toLowerCase(Locale.ROOT))
+                .orElseThrow(() ->
+                        new IllegalArgumentException("User not found."));
 
         String technology = request.getTechnology().trim();
         String difficulty = request.getDifficulty().trim()
                 .toUpperCase(Locale.ROOT);
 
-        // Use the repository's matching method to avoid case mismatches.
         List<Question> allQuestions =
                 questionRepository.findMatchingQuestions(
                         technology,
                         difficulty);
 
-        // Only select questions that contain all MCQ options and an answer.
         List<Question> mcqQuestions = allQuestions.stream()
                 .filter(question ->
                         question.getOptionA() != null
@@ -180,14 +214,10 @@ public class InterviewService {
                 .toList();
 
         if (mcqQuestions.isEmpty()) {
-            throw new RuntimeException(
-                    "No MCQ questions available for technology: "
-                            + technology
-                            + " and difficulty: "
-                            + difficulty);
+            throw new IllegalArgumentException(
+                    "No MCQ questions available for the selected technology and difficulty.");
         }
 
-        // Use only the number of questions actually available.
         int questionCount = Math.min(mcqQuestions.size(), amount);
 
         List<Question> selectedQuestions =
@@ -205,61 +235,80 @@ public class InterviewService {
         return interviewRepository.save(interview);
     }
 
-    // Retrieve the logged-in user's interviews.
+    // ----------------------------------------------------
+    // GET MY INTERVIEWS
+    // ----------------------------------------------------
+
+    @Transactional(readOnly = true)
     public List<Interview> getMyInterviews(String email) {
 
         return interviewRepository
-                .findByUser_EmailOrderByIdDesc(email);
+                .findByUser_EmailOrderByIdDesc(
+                        email.trim().toLowerCase(Locale.ROOT));
     }
 
-    // Complete an interview after all questions have been answered.
-    public Interview completeInterview(Long interviewId) {
+    // ----------------------------------------------------
+    // COMPLETE INTERVIEW - OWNER ONLY
+    // ----------------------------------------------------
 
-        Interview interview = interviewRepository.findById(interviewId)
-                .orElseThrow(() ->
-                        new RuntimeException("Interview not found"));
+    @Transactional
+    public Interview completeInterview(
+            Long interviewId,
+            String email) {
+
+        Interview interview =
+                requireOwnedInterview(interviewId, email);
+
+        if ("COMPLETED".equalsIgnoreCase(interview.getStatus())) {
+            throw new IllegalArgumentException(
+                    "This interview has already been completed.");
+        }
 
         List<Question> questions = interview.getQuestions();
 
         int totalQuestions =
                 questions == null ? 0 : questions.size();
 
+        if (totalQuestions == 0) {
+            throw new IllegalArgumentException(
+                    "No questions are assigned to this interview.");
+        }
+
         List<Answer> answers =
-                answerService.getInterviewAnswers(interviewId);
+                answerService.getInterviewAnswers(interviewId, email);
 
         int answeredQuestions = answers.size();
 
         if (answeredQuestions < totalQuestions) {
-            throw new RuntimeException(
-                    "Interview cannot be completed. "
-                            + "Please answer all questions first. "
-                            + "Answered: "
-                            + answeredQuestions
-                            + "/"
-                            + totalQuestions);
+            throw new IllegalArgumentException(
+                    "Interview cannot be completed. Please answer all questions first. Answered: "
+                            + answeredQuestions + "/" + totalQuestions);
         }
 
         Double finalScore =
-                answerService.calculateInterviewScore(interviewId);
+                answerService.calculateInterviewScore(interviewId, email);
 
         interview.setScore(finalScore);
         interview.setStatus("COMPLETED");
-        interview.setCompletedAt(
-                java.time.LocalDateTime.now());
+        interview.setCompletedAt(LocalDateTime.now());
 
         return interviewRepository.save(interview);
     }
 
-    // Retrieve the result of an interview.
-    public InterviewResultResponse getInterviewResult(
-            Long interviewId) {
+    // ----------------------------------------------------
+    // GET INTERVIEW RESULT - OWNER ONLY
+    // ----------------------------------------------------
 
-        Interview interview = interviewRepository.findById(interviewId)
-                .orElseThrow(() ->
-                        new RuntimeException("Interview not found"));
+    @Transactional(readOnly = true)
+    public InterviewResultResponse getInterviewResult(
+            Long interviewId,
+            String email) {
+
+        Interview interview =
+                requireOwnedInterview(interviewId, email);
 
         List<Answer> answers =
-                answerService.getInterviewAnswers(interviewId);
+                answerService.getInterviewAnswers(interviewId, email);
 
         List<Question> questions = interview.getQuestions();
 
@@ -269,7 +318,7 @@ public class InterviewService {
         int answeredQuestions = answers.size();
 
         Double finalScore =
-                answerService.calculateInterviewScore(interviewId);
+                answerService.calculateInterviewScore(interviewId, email);
 
         return new InterviewResultResponse(
                 interview.getId(),
@@ -282,13 +331,18 @@ public class InterviewService {
         );
     }
 
-    // Retrieve the logged-in user's interview history.
+    // ----------------------------------------------------
+    // GET MY INTERVIEW HISTORY
+    // ----------------------------------------------------
+
+    @Transactional(readOnly = true)
     public List<InterviewHistoryResponse> getMyInterviewHistory(
             String email) {
 
         List<Interview> interviews =
                 interviewRepository
-                        .findByUser_EmailOrderByIdDesc(email);
+                        .findByUser_EmailOrderByIdDesc(
+                                email.trim().toLowerCase(Locale.ROOT));
 
         return interviews.stream()
                 .map(interview -> new InterviewHistoryResponse(

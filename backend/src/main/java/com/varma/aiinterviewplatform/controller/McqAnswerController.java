@@ -1,9 +1,12 @@
+
 package com.varma.aiinterviewplatform.controller;
 
 import com.varma.aiinterviewplatform.dto.McqAnswerRequest;
 import com.varma.aiinterviewplatform.dto.McqEvaluationResponse;
 import com.varma.aiinterviewplatform.dto.McqResultResponse;
 import com.varma.aiinterviewplatform.service.AnswerService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,19 +19,31 @@ public class McqAnswerController {
         this.answerService = answerService;
     }
 
-    // Submit MCQ answer
+    // Submit an MCQ answer for the authenticated user's interview.
     @PostMapping("/submit")
-    public McqEvaluationResponse submitMcqAnswer(
-            @RequestBody McqAnswerRequest request) {
+    public ResponseEntity<McqEvaluationResponse> submitMcqAnswer(
+            @RequestBody McqAnswerRequest request,
+            Authentication authentication) {
 
-        return answerService.submitMcqAnswer(request);
+        McqEvaluationResponse response =
+                answerService.submitMcqAnswer(
+                        request,
+                        authentication.getName());
+
+        return ResponseEntity.ok(response);
     }
 
-    // Get MCQ assessment result
+    // Retrieve MCQ result only for the authenticated interview owner.
     @GetMapping("/result/{interviewId}")
-    public McqResultResponse getMcqResult(
-            @PathVariable Long interviewId) {
+    public ResponseEntity<McqResultResponse> getMcqResult(
+            @PathVariable Long interviewId,
+            Authentication authentication) {
 
-        return answerService.calculateMcqResult(interviewId);
+        McqResultResponse result =
+                answerService.calculateMcqResult(
+                        interviewId,
+                        authentication.getName());
+
+        return ResponseEntity.ok(result);
     }
 }

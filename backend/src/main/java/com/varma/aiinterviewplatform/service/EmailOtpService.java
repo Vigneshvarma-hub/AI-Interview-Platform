@@ -1,4 +1,3 @@
-
 package com.varma.aiinterviewplatform.service;
 
 import com.varma.aiinterviewplatform.entity.EmailOtp;
@@ -12,19 +11,26 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
 @Service
 public class EmailOtpService {
+
+    private static final int OTP_EXPIRY_MINUTES = 10;
+    private static final int MAX_OTP_ATTEMPTS = 5;
+    private static final int RESEND_COOLDOWN_SECONDS = 60;
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_BCRYPT_PASSWORD_BYTES = 72;
 
     private final JavaMailSender mailSender;
     private final EmailOtpRepository emailOtpRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // Secure random generator for six-digit OTPs.
     private final SecureRandom secureRandom = new SecureRandom();
 
     public EmailOtpService(
@@ -39,8 +45,8 @@ public class EmailOtpService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // Normalize email consistently before database operations.
     private String normalizeEmail(String email) {
+
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email is required.");
         }
@@ -48,56 +54,109 @@ public class EmailOtpService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    // Generate a cryptographically secure six-digit OTP.
     private String generateOtp() {
-        return String.valueOf(100000 + secureRandom.nextInt(900000));
+
+        return String.valueOf(
+                100000 + secureRandom.nextInt(900000)
+        );
     }
 
-    // Create and send an OTP for a specific purpose.
+    private void checkResendCooldown(EmailOtp existingOtp) {
+
+        if (existingOtp == null || existingOtp.getLastSentAt() == null) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        long elapsedSeconds = ChronoUnit.SECONDS.between(
+                existingOtp.getLastSentAt(),
+                now
+        );
+
+        if (elapsedSeconds < RESEND_COOLDOWN_SECONDS) {
+
+            long remainingSeconds =
+                    RESEND_COOLDOWN_SECONDS - elapsedSeconds;
+
+            throw new IllegalArgumentException(
+                    "Please wait " + remainingSeconds
+                            + " seconds before requesting another OTP."
+            );
+        }
+    }
+
     private void createAndSendOtp(
             String email,
             EmailOtp.Purpose purpose,
             String subject,
             String purposeDescription) {
 
-        String otp = generateOtp();
-        LocalDateTime expiryTime = LocalDateTime.now().plusMinutes(10);
+        EmailOtp existingOtp = emailOtpRepository
+                .findByEmailAndPurposeForUpdate(email, purpose)
+                .orElse(null);
 
-        // Replace only the OTP for this purpose.
-        emailOtpRepository.deleteByEmailAndPurpose(email, purpose);
+        checkResendCooldown(existingOtp);
 
-        // Save the OTP with its purpose and expiry.
-        EmailOtp emailOtp = new EmailOtp(
-                email,
-                otp,
-                expiryTime,
-                purpose
-        );
+        String plainOtp = generateOtp();
+        String hashedOtp = passwordEncoder.encode(plainOtp);
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiryTime = now.plusMinutes(OTP_EXPIRY_MINUTES);
+
+        EmailOtp emailOtp;
+
+        if (existingOtp != null) {
+
+            emailOtp = existingOtp;
+
+            emailOtp.setOtp(hashedOtp);
+            emailOtp.setExpiryTime(expiryTime);
+            emailOtp.setAttempts(0);
+            emailOtp.setLastSentAt(now);
+
+        } else {
+
+            emailOtp = new EmailOtp(
+                    email,
+                    hashedOtp,
+                    expiryTime,
+                    purpose
+            );
+
+            emailOtp.setAttempts(0);
+            emailOtp.setLastSentAt(now);
+        }
 
         emailOtpRepository.saveAndFlush(emailOtp);
 
-        // Prepare the email.
         SimpleMailMessage message = new SimpleMailMessage();
+
         message.setTo(email);
         message.setSubject(subject);
+
         message.setText(
                 "Hello,\n\n"
-                        + "Your " + purposeDescription + " OTP is: " + otp + "\n\n"
-                        + "This OTP is valid for 10 minutes.\n"
+                        + "Your " + purposeDescription
+                        + " OTP is: " + plainOtp + "\n\n"
+                        + "This OTP is valid for "
+                        + OTP_EXPIRY_MINUTES + " minutes.\n"
+                        + "You have a maximum of "
+                        + MAX_OTP_ATTEMPTS
+                        + " verification attempts.\n\n"
                         + "Please do not share this code with anyone.\n\n"
                         + "Regards,\n"
                         + "NexPrep AI Team"
         );
 
-        // If email delivery fails, propagate the error to the caller.
         mailSender.send(message);
     }
 
     // ---------------- EMAIL VERIFICATION ----------------
 
-    // Generate and send an OTP for new-user email verification.
     @Transactional
     public void sendVerificationOtp(String email) {
+
         String normalizedEmail = normalizeEmail(email);
 
         createAndSendOtp(
@@ -108,9 +167,9 @@ public class EmailOtpService {
         );
     }
 
-    // Resend an OTP to an existing unverified user.
     @Transactional
     public void resendVerificationOtp(String email) {
+
         String normalizedEmail = normalizeEmail(email);
 
         User user = userRepository.findByEmail(normalizedEmail)
@@ -127,13 +186,13 @@ public class EmailOtpService {
         sendVerificationOtp(normalizedEmail);
     }
 
-    // Verify an email-verification OTP without accepting reset OTPs.
-    @Transactional
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public void verifyOtp(String email, String enteredOtp) {
+
         String normalizedEmail = normalizeEmail(email);
 
         EmailOtp storedOtp = emailOtpRepository
-                .findByEmailAndPurpose(
+                .findByEmailAndPurposeForUpdate(
                         normalizedEmail,
                         EmailOtp.Purpose.EMAIL_VERIFICATION
                 )
@@ -151,15 +210,14 @@ public class EmailOtpService {
         user.setEmailVerified(true);
         userRepository.save(user);
 
-        // Consume the OTP after successful verification.
         emailOtpRepository.delete(storedOtp);
     }
 
     // ---------------- FORGOT PASSWORD ----------------
 
-    // Send a password-reset OTP to a registered email.
     @Transactional
     public void sendPasswordResetOtp(String email) {
+
         String normalizedEmail = normalizeEmail(email);
 
         User user = userRepository.findByEmail(normalizedEmail)
@@ -167,9 +225,9 @@ public class EmailOtpService {
                         "If an account exists for that email, a reset OTP can be sent."
                 ));
 
-        if (Boolean.FALSE.equals(user.getActive())) {
+        if (!Boolean.TRUE.equals(user.getActive())) {
             throw new IllegalArgumentException(
-                    "This account is inactive. Please contact support."
+                    "If an account exists for that email, a reset OTP can be sent."
             );
         }
 
@@ -181,13 +239,15 @@ public class EmailOtpService {
         );
     }
 
-    // Verify the password-reset OTP; do not mark the email as verified here.
-    @Transactional(readOnly = true)
-    public void verifyPasswordResetOtp(String email, String enteredOtp) {
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
+    public void verifyPasswordResetOtp(
+            String email,
+            String enteredOtp) {
+
         String normalizedEmail = normalizeEmail(email);
 
         EmailOtp storedOtp = emailOtpRepository
-                .findByEmailAndPurpose(
+                .findByEmailAndPurposeForUpdate(
                         normalizedEmail,
                         EmailOtp.Purpose.PASSWORD_RESET
                 )
@@ -198,8 +258,7 @@ public class EmailOtpService {
         validateOtp(storedOtp, enteredOtp);
     }
 
-    // Change the password only after the correct, unexpired reset OTP is supplied.
-    @Transactional
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public void resetPassword(
             String email,
             String enteredOtp,
@@ -207,16 +266,10 @@ public class EmailOtpService {
 
         String normalizedEmail = normalizeEmail(email);
 
-        if (newPassword == null
-                || newPassword.length() < 8
-                || newPassword.length() > 72) {
-            throw new IllegalArgumentException(
-                    "Password must contain between 8 and 72 characters."
-            );
-        }
+        validatePassword(newPassword);
 
         EmailOtp storedOtp = emailOtpRepository
-                .findByEmailAndPurpose(
+                .findByEmailAndPurposeForUpdate(
                         normalizedEmail,
                         EmailOtp.Purpose.PASSWORD_RESET
                 )
@@ -224,7 +277,6 @@ public class EmailOtpService {
                         "Reset OTP not found. Please request a new OTP."
                 ));
 
-        // Verify OTP and expiry before changing the password.
         validateOtp(storedOtp, enteredOtp);
 
         User user = userRepository.findByEmail(normalizedEmail)
@@ -232,17 +284,75 @@ public class EmailOtpService {
                         "User account not found."
                 ));
 
-        // Store only the BCrypt hash, never the plain-text password.
+        // Update the password.
         user.setPassword(passwordEncoder.encode(newPassword));
+
+        // Invalidate all previously issued JWT sessions for this user.
+        long currentVersion = user.getTokenVersion() == null
+                ? 0L
+                : user.getTokenVersion();
+
+        user.setTokenVersion(Math.addExact(currentVersion, 1L));
+
         userRepository.save(user);
 
-        // A reset OTP must be usable only once.
+        // Consume the reset OTP after successful password reset.
         emailOtpRepository.delete(storedOtp);
     }
 
-    // Shared validation for both OTP purposes.
-    private void validateOtp(EmailOtp storedOtp, String enteredOtp) {
+    // ---------------- PASSWORD VALIDATION ----------------
+
+    private void validatePassword(String password) {
+
+        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least 8 characters."
+            );
+        }
+
+        int passwordBytes = password.getBytes(
+                StandardCharsets.UTF_8
+        ).length;
+
+        if (passwordBytes > MAX_BCRYPT_PASSWORD_BYTES) {
+            throw new IllegalArgumentException(
+                    "Password must not exceed 72 UTF-8 bytes."
+            );
+        }
+
+        if (!password.matches(".*[A-Z].*")) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least one uppercase letter."
+            );
+        }
+
+        if (!password.matches(".*[a-z].*")) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least one lowercase letter."
+            );
+        }
+
+        if (!password.matches(".*[0-9].*")) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least one number."
+            );
+        }
+
+        if (!password.matches(".*[^a-zA-Z0-9].*")) {
+            throw new IllegalArgumentException(
+                    "Password must contain at least one special character."
+            );
+        }
+    }
+
+    // ---------------- OTP VALIDATION ----------------
+
+    private void validateOtp(
+            EmailOtp storedOtp,
+            String enteredOtp) {
+
         if (LocalDateTime.now().isAfter(storedOtp.getExpiryTime())) {
+
             emailOtpRepository.delete(storedOtp);
 
             throw new IllegalArgumentException(
@@ -250,10 +360,53 @@ public class EmailOtpService {
             );
         }
 
-        if (enteredOtp == null
-                || !storedOtp.getOtp().equals(enteredOtp.trim())) {
+        if (storedOtp.getAttempts() >= MAX_OTP_ATTEMPTS) {
+
+            emailOtpRepository.delete(storedOtp);
+
             throw new IllegalArgumentException(
-                    "Invalid OTP. Please enter the correct code."
+                    "Maximum OTP attempts exceeded. Please request a new OTP."
+            );
+        }
+
+        boolean validFormat = enteredOtp != null
+                && enteredOtp.trim().matches("[0-9]{6}");
+
+        boolean matches = false;
+
+        if (validFormat) {
+            try {
+                matches = passwordEncoder.matches(
+                        enteredOtp.trim(),
+                        storedOtp.getOtp()
+                );
+            } catch (IllegalArgumentException exception) {
+                matches = false;
+            }
+        }
+
+        if (!matches) {
+
+            int attempts = storedOtp.getAttempts() + 1;
+            storedOtp.setAttempts(attempts);
+
+            if (attempts >= MAX_OTP_ATTEMPTS) {
+
+                emailOtpRepository.delete(storedOtp);
+
+                throw new IllegalArgumentException(
+                        "Maximum OTP attempts exceeded. Please request a new OTP."
+                );
+            }
+
+            emailOtpRepository.save(storedOtp);
+
+            int remainingAttempts = MAX_OTP_ATTEMPTS - attempts;
+
+            throw new IllegalArgumentException(
+                    "Invalid OTP. "
+                            + remainingAttempts
+                            + " attempt(s) remaining."
             );
         }
     }

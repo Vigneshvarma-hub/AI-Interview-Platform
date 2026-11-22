@@ -1,13 +1,13 @@
 
 package com.varma.aiinterviewplatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 @Entity
 @Table(
         name = "answers",
         uniqueConstraints = {
-                // Prevent duplicate answers for the same question in one attempt.
                 @UniqueConstraint(
                         name = "uk_answer_interview_question",
                         columnNames = {"interview_id", "question_id"}
@@ -20,53 +20,36 @@ public class Answer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // For MCQ: A
-    // For MSQ: A,C,D
-    // For descriptive interviews: the user's written answer.
     @Column(columnDefinition = "TEXT")
     private String answerText;
 
-    // Existing evaluation score.
     private Double score;
 
-    // Existing feedback, or post-test explanation feedback.
     @Column(columnDefinition = "TEXT")
     private String feedback;
 
-    // Test Center review status.
-    // Existing answers default to false.
-    @Column(name = "marked_for_review", nullable = false)
+    @Column(nullable = false)
     private boolean markedForReview = false;
 
-    @ManyToOne
-    @JoinColumn(name = "interview_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "interview_id", nullable = false)
+    @JsonIgnore
     private Interview interview;
 
-    @ManyToOne
-    @JoinColumn(name = "question_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "question_id", nullable = false)
+    @JsonIgnore
     private Question question;
 
     public Answer() {
     }
 
-    // Preserve the existing constructor used by current interview features.
-    public Answer(
-            String answerText,
-            Double score,
-            String feedback,
-            Interview interview,
-            Question question) {
-
-        this.answerText = answerText;
-        this.score = score;
-        this.feedback = feedback;
-        this.interview = interview;
-        this.question = question;
-        this.markedForReview = false;
-    }
-
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getAnswerText() {
@@ -101,6 +84,7 @@ public class Answer {
         this.markedForReview = markedForReview;
     }
 
+    @JsonIgnore
     public Interview getInterview() {
         return interview;
     }
@@ -109,6 +93,7 @@ public class Answer {
         this.interview = interview;
     }
 
+    @JsonIgnore
     public Question getQuestion() {
         return question;
     }

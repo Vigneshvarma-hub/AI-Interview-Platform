@@ -1,9 +1,14 @@
+
 package com.varma.aiinterviewplatform.controller;
 
 import com.varma.aiinterviewplatform.dto.AnswerRequest;
 import com.varma.aiinterviewplatform.entity.Answer;
 import com.varma.aiinterviewplatform.service.AnswerService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/answers")
@@ -15,24 +20,51 @@ public class AnswerController {
         this.answerService = answerService;
     }
 
-    @PostMapping
-    public Answer submitAnswer(
-            @RequestBody AnswerRequest request) {
+    // ----------------------------------------------------
+    // SUBMIT ANSWER - AUTHENTICATED OWNER ONLY
+    // ----------------------------------------------------
 
-        return answerService.submitAnswer(request);
+    @PostMapping
+    public ResponseEntity<Answer> submitAnswer(
+            @RequestBody AnswerRequest request,
+            Authentication authentication) {
+
+        Answer answer = answerService.submitAnswerForUser(
+                request,
+                authentication.getName());
+
+        return ResponseEntity.ok(answer);
     }
+
+    // ----------------------------------------------------
+    // GET INTERVIEW SCORE - OWNER ONLY
+    // ----------------------------------------------------
 
     @GetMapping("/interview/{interviewId}/score")
-    public Double getInterviewScore(
-            @PathVariable Long interviewId) {
+    public ResponseEntity<Double> getInterviewScore(
+            @PathVariable Long interviewId,
+            Authentication authentication) {
 
-        return answerService.calculateInterviewScore(interviewId);
+        Double score = answerService.calculateInterviewScore(
+                interviewId,
+                authentication.getName());
+
+        return ResponseEntity.ok(score);
     }
 
-    @GetMapping("/interview/{interviewId}")
-    public java.util.List<Answer> getInterviewAnswers(
-            @PathVariable Long interviewId) {
+    // ----------------------------------------------------
+    // GET INTERVIEW ANSWERS - OWNER ONLY
+    // ----------------------------------------------------
 
-        return answerService.getInterviewAnswers(interviewId);
+    @GetMapping("/interview/{interviewId}")
+    public ResponseEntity<List<Answer>> getInterviewAnswers(
+            @PathVariable Long interviewId,
+            Authentication authentication) {
+
+        List<Answer> answers = answerService.getInterviewAnswers(
+                interviewId,
+                authentication.getName());
+
+        return ResponseEntity.ok(answers);
     }
 }

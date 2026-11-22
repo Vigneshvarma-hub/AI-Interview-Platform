@@ -1,69 +1,48 @@
 
 package com.varma.aiinterviewplatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 @Entity
 @Table(name = "questions")
 public class Question {
 
-    // Primary key.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Main question text.
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String questionText;
 
-    // Subject or technology: Java, DBMS, OS, DSA, etc.
-    @Column(nullable = false)
     private String technology;
 
-    // EASY, MEDIUM, HARD.
-    @Column(nullable = false)
     private String difficulty;
 
-    // Topic within the subject, such as OOP or Collections.
     private String category;
 
-    // MCQ or MSQ. Existing questions default to MCQ only
-    // when they already have valid options; descriptive
-    // interview questions can leave this field null.
-    @Column(name = "question_type", length = 10)
     private String questionType;
 
-    // Four options used by the current assessment system.
-    @Column(columnDefinition = "TEXT")
     private String optionA;
 
-    @Column(columnDefinition = "TEXT")
     private String optionB;
 
-    @Column(columnDefinition = "TEXT")
     private String optionC;
 
-    @Column(columnDefinition = "TEXT")
     private String optionD;
 
-    // Existing single-correct-option field.
-    // Preserve it for compatibility with current MCQ code.
     private String correctOption;
 
-    // MSQ answers stored as comma-separated option letters.
-    // Example: A,C,D
-    // The backend must never expose this field during an exam.
-    @Column(name = "correct_options", length = 20)
+    @Column(columnDefinition = "TEXT")
     private String correctOptions;
 
-    // Explanation shown in the Analyze tab after submission.
     @Column(columnDefinition = "TEXT")
     private String explanation;
 
     public Question() {
     }
 
-    // Existing constructor for descriptive interview questions.
+    // Constructor for descriptive / technical questions.
     public Question(
             String questionText,
             String technology,
@@ -74,9 +53,10 @@ public class Question {
         this.technology = technology;
         this.difficulty = difficulty;
         this.category = category;
+        this.questionType = "DESCRIPTIVE";
     }
 
-    // Existing constructor for single-answer MCQs.
+    // Constructor for MCQ questions.
     public Question(
             String questionText,
             String technology,
@@ -86,7 +66,8 @@ public class Question {
             String optionB,
             String optionC,
             String optionD,
-            String correctOption) {
+            String correctOption,
+            String explanation) {
 
         this.questionText = questionText;
         this.technology = technology;
@@ -98,10 +79,15 @@ public class Question {
         this.optionC = optionC;
         this.optionD = optionD;
         this.correctOption = correctOption;
+        this.explanation = explanation;
     }
 
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getQuestionText() {
@@ -141,16 +127,7 @@ public class Question {
     }
 
     public void setQuestionType(String questionType) {
-        if (questionType != null
-                && !questionType.equalsIgnoreCase("MCQ")
-                && !questionType.equalsIgnoreCase("MSQ")) {
-            throw new IllegalArgumentException(
-                    "Question type must be MCQ or MSQ");
-        }
-
-        this.questionType = questionType == null
-                ? null
-                : questionType.trim().toUpperCase();
+        this.questionType = questionType;
     }
 
     public String getOptionA() {
@@ -185,6 +162,7 @@ public class Question {
         this.optionD = optionD;
     }
 
+    @JsonIgnore
     public String getCorrectOption() {
         return correctOption;
     }
@@ -193,6 +171,7 @@ public class Question {
         this.correctOption = correctOption;
     }
 
+    @JsonIgnore
     public String getCorrectOptions() {
         return correctOptions;
     }
@@ -201,6 +180,7 @@ public class Question {
         this.correctOptions = correctOptions;
     }
 
+    @JsonIgnore
     public String getExplanation() {
         return explanation;
     }
