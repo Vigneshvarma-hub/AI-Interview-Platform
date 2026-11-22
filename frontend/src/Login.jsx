@@ -4,9 +4,10 @@ import EmailVerification from "./EmailVerification";
 
 const API_BASE_URL = "http://localhost:8080/api/auth";
 
-function Login({ onLoginSuccess }) {
+function Login({ onLoginSuccess, initialMode = "login" }) {
+  const authStyles = '\n.auth-container {\n  position: relative; isolation: isolate; overflow: hidden;\n  min-height: 100vh; width: 100%; display:flex; align-items:center; justify-content:center;\n  padding: 36px 20px; box-sizing:border-box;\n  background: radial-gradient(ellipse at 18% 18%, rgba(117,75,255,.24), transparent 38%),\n              radial-gradient(ellipse at 82% 78%, rgba(56,217,255,.13), transparent 34%),\n              linear-gradient(135deg,#080a18 0%,#11102a 48%,#090b1b 100%);\n}\n.auth-container::before,.auth-container::after {\n  content:""; position:absolute; z-index:-1; width:430px; height:430px; border-radius:50%;\n  filter:blur(85px); opacity:.34; pointer-events:none; animation:authFloat 13s ease-in-out infinite alternate;\n}\n.auth-container::before { background:#713dff; top:-190px; left:-120px; }\n.auth-container::after { background:#1d9ed0; right:-180px; bottom:-220px; animation-delay:-6s; }\n.auth-card {\n  position:relative; z-index:1; width:390px; max-width:100%; padding:38px 34px;\n  border:1px solid rgba(255,255,255,.13); border-radius:22px;\n  background:linear-gradient(145deg,rgba(30,27,58,.91),rgba(17,19,39,.88));\n  box-shadow:0 24px 80px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.08);\n  backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);\n  text-align:center; box-sizing:border-box; animation:authEnter .7s cubic-bezier(.2,.8,.2,1) both;\n}\n.auth-card h2 { color:#f4f2ff; font-size:20px; margin:8px 0 22px; font-weight:650; }\n.auth-card input {\n  color:#f8f7ff !important; background:rgba(255,255,255,.075) !important;\n  border:1px solid rgba(190,178,255,.22) !important; border-radius:10px !important;\n  outline:none; transition:border-color .22s,box-shadow .22s,background .22s,transform .22s;\n}\n.auth-card input::placeholder { color:#aaa8c5; }\n.auth-card input:focus { border-color:#9b7cff !important; background:rgba(255,255,255,.105) !important;\n  box-shadow:0 0 0 3px rgba(117,75,255,.2),0 0 22px rgba(117,75,255,.12); transform:translateY(-1px); }\n.auth-primary {\n  position:relative; overflow:hidden; font-weight:700; letter-spacing:.2px;\n  background:linear-gradient(105deg,#6745f5,#9557ff 55%,#5b6bff) !important;\n  box-shadow:0 9px 24px rgba(108,76,255,.28); transition:transform .2s,box-shadow .2s,filter .2s;\n}\n.auth-primary:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 13px 30px rgba(108,76,255,.4); filter:brightness(1.08); }\n.auth-primary:disabled { cursor:not-allowed; }\n.auth-secondary {\n  color:#d2c8ff !important; border-color:rgba(160,135,255,.48) !important;\n  border-radius:10px !important; transition:background .2s,border-color .2s,transform .2s;\n}\n.auth-secondary:hover:not(:disabled) { background:rgba(117,75,255,.13) !important; border-color:#a78bfa !important; transform:translateY(-1px); }\n.auth-brand {\n  margin:0 0 7px; font-size:34px; font-weight:850; letter-spacing:-1.3px;\n  background:linear-gradient(110deg,#fff 4%,#c8b8ff 42%,#8b6aff 75%,#64dfff);\n  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;\n  filter:drop-shadow(0 4px 18px rgba(139,106,255,.24));\n}\n.auth-tagline { margin:0 0 22px; color:#aaa7c8; font-size:12px; letter-spacing:1.65px; text-transform:uppercase; }\n.auth-description { color:#b9b6d0 !important; }\n.auth-switch-text { color:#c5c1d8 !important; }\n.auth-message-error { color:#ff9aab !important; }\n.auth-message-success { color:#83e8c0 !important; }\n@keyframes authEnter { from { opacity:0; transform:translateY(18px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }\n@keyframes authFloat { from { transform:translate3d(0,0,0) scale(1); } to { transform:translate3d(45px,35px,0) scale(1.18); } }\n@media (max-width:480px) { .auth-card { padding:30px 23px; border-radius:18px; } .auth-brand {font-size:30px;} }\n@media (prefers-reduced-motion:reduce) { .auth-container::before,.auth-container::after,.auth-card { animation:none !important; } * {scroll-behavior:auto !important; transition:none !important;} }\n';
   // Existing login, registration, and email-verification screens.
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(initialMode === "register");
   const [showEmailVerification, setShowEmailVerification] = useState(false);
 
   // Forgot Password stages: email -> otp -> password.
@@ -412,9 +413,11 @@ function Login({ onLoginSuccess }) {
           : handleResetPassword;
 
     return (
-      <div style={styles.container}>
-        <form onSubmit={resetSubmitHandler} style={styles.form}>
-          <h1>NexPrep AI</h1>
+      <div className="auth-container" style={styles.container}>
+        <style>{authStyles}</style>
+        <form onSubmit={resetSubmitHandler} className="auth-card" style={styles.form}>
+          <h1 style={styles.brandTitle} className="auth-brand">NexPrep AI</h1>
+          <p className="auth-tagline">Prepare smarter. Interview better.</p>
           <h2>Forgot Password</h2>
 
           <p style={styles.description}>
@@ -513,6 +516,7 @@ function Login({ onLoginSuccess }) {
           )}
 
           <button
+            className="auth-primary"
             type="submit"
             style={{
               ...styles.button,
@@ -541,6 +545,7 @@ function Login({ onLoginSuccess }) {
           {success && <p style={styles.success}>{success}</p>}
 
           <button
+            className="auth-secondary"
             type="button"
             onClick={handleCancelForgotPassword}
             style={styles.switchButton}
@@ -555,12 +560,15 @@ function Login({ onLoginSuccess }) {
 
   // Existing login and registration UI.
   return (
-    <div style={styles.container}>
+    <div className="auth-container" style={styles.container}>
+        <style>{authStyles}</style>
       <form
         onSubmit={isRegistering ? handleRegister : handleLogin}
+        className="auth-card"
         style={styles.form}
       >
-        <h1>AI Interview</h1>
+        <h1 style={styles.brandTitle} className="auth-brand">NexPrep AI</h1>
+          <p className="auth-tagline">Prepare smarter. Interview better.</p>
         <h2>{isRegistering ? "Create Account" : "Login"}</h2>
 
         {/* Name is required only during registration. */}
@@ -639,6 +647,7 @@ function Login({ onLoginSuccess }) {
 
         {/* Submit login or registration. */}
         <button
+          className="auth-primary"
           type="submit"
           style={{
             ...styles.button,
@@ -690,6 +699,7 @@ function Login({ onLoginSuccess }) {
         </p>
 
         <button
+          className="auth-secondary"
           type="button"
           onClick={switchForm}
           style={styles.switchButton}
@@ -709,24 +719,34 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f4f6f8",
+    backgroundColor: "#090b1a",
     padding: "20px",
     boxSizing: "border-box",
   },
 
   form: {
-    width: "350px",
+    width: "390px",
     maxWidth: "100%",
-    padding: "30px",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+    padding: "38px 34px",
+    backgroundColor: "rgba(23,21,43,.92)",
+    borderRadius: "22px",
+    boxShadow: "0 24px 80px rgba(0,0,0,.42)",
     textAlign: "center",
     boxSizing: "border-box",
   },
 
+  brandTitle: {
+    margin: "0 0 8px",
+    fontSize: "30px",
+    fontWeight: 800,
+    letterSpacing: "-0.8px",
+    background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+  },
+
   description: {
-    color: "#555",
+    color: "#b9b6d0",
     fontSize: "14px",
     lineHeight: 1.5,
   },
@@ -736,8 +756,10 @@ const styles = {
     padding: "12px",
     margin: "10px 0",
     boxSizing: "border-box",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
+    border: "1px solid rgba(190,178,255,.22)",
+    borderRadius: "10px",
+    backgroundColor: "rgba(255,255,255,.075)",
+    color: "#f8f7ff",
   },
 
   matchMessage: {
@@ -751,10 +773,10 @@ const styles = {
     width: "100%",
     padding: "12px",
     marginTop: "15px",
-    backgroundColor: "#2563eb",
+    background: "linear-gradient(105deg,#6745f5,#9557ff 55%,#5b6bff)",
     color: "white",
     border: "none",
-    borderRadius: "6px",
+    borderRadius: "10px",
     cursor: "pointer",
   },
 
@@ -763,25 +785,25 @@ const styles = {
     padding: "10px",
     marginTop: "10px",
     backgroundColor: "transparent",
-    color: "#2563eb",
-    border: "1px solid #2563eb",
-    borderRadius: "6px",
+    color: "#d2c8ff",
+    border: "1px solid rgba(160,135,255,.48)",
+    borderRadius: "10px",
     cursor: "pointer",
   },
 
   switchText: {
     marginTop: "20px",
-    color: "#555",
+    color: "#c5c1d8",
   },
 
   error: {
-    color: "#dc2626",
+    color: "#ff9aab",
     marginTop: "15px",
     overflowWrap: "anywhere",
   },
 
   success: {
-    color: "#15803d",
+    color: "#83e8c0",
     marginTop: "15px",
     overflowWrap: "anywhere",
   },

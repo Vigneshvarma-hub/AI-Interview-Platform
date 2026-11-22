@@ -1,535 +1,325 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+const INTERVIEWS_API = "http://localhost:8080/api/interviews/my";
+const SKILL_GAP_API = "http://localhost:8080/api/skill-gaps/interview";
+
+function getToken() {
+  const storedToken =
+    localStorage.getItem("token") ||
+    localStorage.getItem("jwtToken") ||
+    localStorage.getItem("authToken");
+
+  if (!storedToken) return null;
+
+  return storedToken.startsWith("Bearer ")
+    ? storedToken.substring(7)
+    : storedToken;
+}
+
+async function readJsonResponse(response, fallbackMessage) {
+  const responseText = await response.text();
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Your session is not authorized. Please sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      responseText || `${fallbackMessage} (error ${response.status}).`
+    );
+  }
+
+  if (!responseText.trim()) return null;
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    throw new Error("The server returned an invalid response. Please try again.");
+  }
+}
+
+function getGapLevel(score) {
+  if (score < 5) return "High gap";
+  if (score < 7) return "Medium gap";
+  return "Low gap";
+}
+
+function getGapMessage(score) {
+  if (score < 5) {
+    return "Prioritize this area. Revisit the fundamentals and practise regularly.";
+  }
+
+  if (score < 7) {
+    return "You have a foundation here. Focused practice can help you improve.";
+  }
+
+  return "You are performing well in this area. Keep your knowledge sharp.";
+}
+
+function getGapClass(score) {
+  if (score < 5) return "high";
+  if (score < 7) return "medium";
+  return "low";
+}
 
 function SkillGap() {
-
-  // Store the skill-gap analysis returned by the backend.
   const [skillGap, setSkillGap] = useState(null);
-
-  // Store the latest completed interview ID.
   const [interviewId, setInterviewId] = useState(null);
-
-  // Store loading state.
   const [loading, setLoading] = useState(true);
-
-  // Store error message.
   const [error, setError] = useState("");
 
+  const loadSkillGap = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  // Get JWT token from localStorage.
-  function getToken() {
+      const token = getToken();
 
-    const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
 
-    if (!token) {
-      return null;
-    }
-
-    // Remove "Bearer " if it is already stored.
-    return token.startsWith("Bearer ")
-      ? token.substring(7)
-      : token;
-  }
-
-
-  // Find the latest completed interview.
-  async function findLatestCompletedInterview() {
-
-    const token = getToken();
-
-    if (!token) {
-      throw new Error(
-        "JWT token not found. Please login again."
-      );
-    }
-
-
-    // Fetch the logged-in user's interviews.
-    const response = await fetch(
-      "http://localhost:8080/api/interviews/my",
-      {
+      const interviewResponse = await fetch(INTERVIEWS_API, {
         method: "GET",
-
         headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
+      });
+
+      const interviews = await readJsonResponse(
+        interviewResponse,
+        "Unable to load your interviews"
+      );
+
+      const completedInterviews = Array.isArray(interviews)
+        ? interviews.filter(
+            (interview) =>
+              String(interview.status || "").toUpperCase() === "COMPLETED"
+          )
+        : [];
+
+      if (completedInterviews.length === 0) {
+        setInterviewId(null);
+        setSkillGap(null);
+        throw new Error("No completed interview found. Complete an interview first.");
       }
-    );
 
+      // Select the most recent completed interview when date fields are available.
+      completedInterviews.sort((a, b) => {
+        const dateA = new Date(a.completedAt || a.createdAt || 0).getTime();
+        const dateB = new Date(b.completedAt || b.createdAt || 0).getTime();
+        return (Number.isFinite(dateB) ? dateB : 0) -
+          (Number.isFinite(dateA) ? dateA : 0);
+      });
 
-    // Handle unauthorized request.
-    if (response.status === 401) {
-      throw new Error(
-        "Unauthorized. Please login again."
-      );
-    }
+      const latestInterview = completedInterviews[0];
+      const latestId = latestInterview.id || latestInterview.interviewId;
 
-
-    // Handle forbidden request.
-    if (response.status === 403) {
-      throw new Error(
-        "Access denied. Please login again."
-      );
-    }
-
-
-    // Handle other errors.
-    if (!response.ok) {
-      throw new Error(
-        "Failed to load your interviews."
-      );
-    }
-
-
-    // Convert response to JSON.
-    const interviews = await response.json();
-
-
-    // Find the first completed interview.
-    const completedInterview =
-      interviews.find(
-        (interview) =>
-          interview.status === "COMPLETED"
-      );
-
-
-    // Stop if there is no completed interview.
-    if (!completedInterview) {
-      throw new Error(
-        "No completed interview found. Complete an interview first."
-      );
-    }
-
-
-    // Store completed interview ID.
-    setInterviewId(
-      completedInterview.id ||
-      completedInterview.interviewId
-    );
-
-
-    return (
-      completedInterview.id ||
-      completedInterview.interviewId
-    );
-  }
-
-
-  // Fetch skill-gap analysis for the selected interview.
-  async function fetchSkillGap(id) {
-
-    const token = getToken();
-
-    if (!token) {
-      throw new Error(
-        "JWT token not found. Please login again."
-      );
-    }
-
-
-    // Call Skill Gap API.
-    const response = await fetch(
-      `http://localhost:8080/api/skill-gaps/interview/${id}`,
-      {
-        method: "GET",
-
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
+      if (!latestId) {
+        throw new Error("The latest completed interview has no valid ID.");
       }
-    );
 
+      setInterviewId(latestId);
 
-    // Handle unauthorized request.
-    if (response.status === 401) {
-      throw new Error(
-        "Unauthorized. Please login again."
+      const gapResponse = await fetch(
+        `${SKILL_GAP_API}/${latestId}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
-    }
 
-
-    // Handle forbidden request.
-    if (response.status === 403) {
-      throw new Error(
-        "Access denied. You cannot access this interview."
+      const gapData = await readJsonResponse(
+        gapResponse,
+        "Unable to load skill-gap analysis"
       );
+
+      setSkillGap(gapData);
+    } catch (err) {
+      console.error("Skill Gap error:", err);
+      setError(err.message || "Something went wrong while loading your skill gaps.");
+    } finally {
+      setLoading(false);
     }
-
-
-    // Handle other API errors.
-    if (!response.ok) {
-      throw new Error(
-        "Failed to load skill-gap analysis."
-      );
-    }
-
-
-    // Convert response to JSON.
-    const data = await response.json();
-
-
-    // Store skill-gap data.
-    setSkillGap(data);
-  }
-
-
-  // Load skill-gap information when the page opens.
-  useEffect(() => {
-
-    async function loadSkillGap() {
-
-      try {
-
-        // Start loading.
-        setLoading(true);
-
-        // Clear previous error.
-        setError("");
-
-
-        // Find latest completed interview.
-        const id =
-          await findLatestCompletedInterview();
-
-
-        // Fetch its skill-gap analysis.
-        await fetchSkillGap(id);
-
-
-      } catch (err) {
-
-        // Print error in browser console.
-        console.error(
-          "Skill Gap error:",
-          err
-        );
-
-        // Show error to the user.
-        setError(err.message);
-
-
-      } finally {
-
-        // Stop loading.
-        setLoading(false);
-      }
-    }
-
-
-    loadSkillGap();
-
   }, []);
 
+  useEffect(() => {
+    loadSkillGap();
+  }, [loadSkillGap]);
 
-  // Get a label based on the skill score.
-  function getGapLevel(score) {
+  const categoryScores = skillGap?.categoryScores &&
+    typeof skillGap.categoryScores === "object"
+    ? Object.entries(skillGap.categoryScores)
+    : [];
 
-    if (score < 5) {
-      return "High Gap";
-    }
+  const weakSkills = Array.isArray(skillGap?.weakSkills)
+    ? skillGap.weakSkills
+    : [];
 
-    if (score < 7) {
-      return "Medium Gap";
-    }
-
-    return "Low Gap";
-  }
-
-
-  // Get an explanation based on the score.
-  function getGapMessage(score) {
-
-    if (score < 5) {
-      return "This skill needs significant improvement and more practice.";
-    }
-
-    if (score < 7) {
-      return "You have a basic understanding, but further practice is recommended.";
-    }
-
-    return "Your performance in this skill is currently strong.";
-  }
-
+  const highGapCount = categoryScores.filter(
+    ([, score]) => Number(score) < 5
+  ).length;
 
   return (
-    <div className="card">
+    <section className="nexprep-page nexprep-skill-gap">
+      <style>{`
+        .nexprep-page{width:100%;color:#edf1ff}
+        .nexprep-page *{box-sizing:border-box}
+        .nexprep-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:23px}
+        .nexprep-kicker{margin:0 0 8px;color:#a995ff;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase}
+        .nexprep-page-head h2{margin:0;font-size:clamp(25px,3vw,32px);letter-spacing:-.8px}
+        .nexprep-page-head p{margin:8px 0 0;color:#aab4cc;font-size:14px}
+        .nexprep-refresh{border:1px solid rgba(167,139,250,.35);background:rgba(124,92,220,.13);color:#d7ccff;border-radius:11px;padding:10px 15px;font-weight:700;cursor:pointer}
+        .nexprep-refresh:hover{background:rgba(124,92,220,.24)}
+        .nexprep-gap-overview{display:grid;grid-template-columns:minmax(0,1.2fr) repeat(2,minmax(130px,.55fr));gap:13px;margin-bottom:22px}
+        .nexprep-gap-hero,.nexprep-gap-stat{padding:20px;background:linear-gradient(145deg,rgba(30,39,70,.96),rgba(21,29,54,.96));border:1px solid rgba(145,158,205,.18);border-radius:15px;box-shadow:0 12px 30px rgba(3,7,18,.18)}
+        .nexprep-gap-hero{background:linear-gradient(125deg,rgba(42,43,91,.98) 0%,rgba(29,42,76,.98) 100%);border-color:rgba(167,139,250,.28)}
+        .nexprep-gap-label{display:block;color:#aab6d2;font-size:12px;font-weight:650}
+        .nexprep-gap-hero strong{display:block;margin:10px 0 4px;color:#f4f6ff;font-size:31px;letter-spacing:-.8px}
+        .nexprep-gap-hero p,.nexprep-gap-stat p{margin:5px 0 0;color:#9daac6;font-size:11px;line-height:1.5}
+        .nexprep-gap-stat strong{display:block;margin-top:13px;color:#f4f6ff;font-size:27px}
+        .nexprep-gap-section-title{margin:0 0 13px;color:#edf1ff;font-size:18px}
+        .nexprep-gap-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+        .nexprep-gap-card{padding:18px;background:linear-gradient(145deg,rgba(29,38,68,.96),rgba(20,28,52,.96));border:1px solid rgba(145,158,205,.18);border-radius:14px;box-shadow:0 8px 24px rgba(3,7,18,.13);transition:border-color .18s ease,transform .18s ease}
+        .nexprep-gap-card:hover{transform:translateY(-2px);border-color:rgba(167,139,250,.55)}
+        .nexprep-gap-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+        .nexprep-gap-card h3{margin:0;color:#edf1ff;font-size:15px}
+        .nexprep-gap-score{color:#b9a5ff;font-size:17px;font-weight:800;white-space:nowrap}
+        .nexprep-gap-track{height:8px;overflow:hidden;border-radius:99px;background:rgba(177,190,225,.17)}
+        .nexprep-gap-track span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#8b5cf6,#38bdf8)}
+        .nexprep-gap-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px}
+        .nexprep-gap-badge{display:inline-flex;padding:6px 9px;border-radius:99px;font-size:10px;font-weight:800}
+        .nexprep-gap-badge.high{background:rgba(248,113,113,.16);color:#fca5a5}
+        .nexprep-gap-badge.medium{background:rgba(251,191,36,.15);color:#fcd34d}
+        .nexprep-gap-badge.low{background:rgba(52,211,153,.15);color:#6ee7b7}
+        .nexprep-gap-card p{margin:11px 0 0;color:#aab6d2;font-size:12px;line-height:1.55}
+        .nexprep-gap-interview{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;padding:14px 17px;background:linear-gradient(145deg,rgba(30,39,70,.96),rgba(21,29,54,.96));border:1px solid rgba(145,158,205,.18);border-radius:13px;box-shadow:0 8px 24px rgba(3,7,18,.13)}
+        .nexprep-gap-interview span{display:block;color:#9daac6;font-size:11px}
+        .nexprep-gap-interview strong{display:block;margin-top:4px;color:#edf1ff;font-size:14px}
+        .nexprep-gap-empty,.nexprep-gap-message{padding:36px 22px;background:linear-gradient(145deg,rgba(30,39,70,.96),rgba(21,29,54,.96));border:1px solid rgba(145,158,205,.18);border-radius:15px;text-align:center;box-shadow:0 12px 30px rgba(3,7,18,.16)}
+        .nexprep-gap-empty h3,.nexprep-gap-message h3{margin:0 0 7px;color:#f1f4ff;font-size:17px}
+        .nexprep-gap-empty p,.nexprep-gap-message p{margin:0;color:#aab6d2;font-size:13px;line-height:1.6}
+        .nexprep-retry{margin-top:16px;border:0;border-radius:10px;background:linear-gradient(100deg,#7c3aed,#4f8df7);color:#fff;padding:10px 16px;font-weight:700;cursor:pointer}
+        @media(max-width:760px){.nexprep-gap-overview{grid-template-columns:1fr 1fr}.nexprep-gap-hero{grid-column:1/-1}.nexprep-gap-grid{grid-template-columns:1fr}}
+        @media(max-width:430px){.nexprep-page-head{align-items:flex-start}.nexprep-gap-interview{align-items:flex-start;flex-direction:column}}
+      `}</style>
 
-      {/* Page heading. */}
-      <h2>
-        Skill Gap Analysis
-      </h2>
-
-
-      {/* Page description. */}
-      <p>
-        Identify your weaker skills based on your
-        interview performance.
-      </p>
-
-
-      {/* ----------------------------------------- */}
-      {/* Loading state.                            */}
-      {/* ----------------------------------------- */}
-
-      {loading && (
-        <div
-          style={{
-            marginTop: "25px",
-            padding: "20px",
-            textAlign: "center",
-          }}
-        >
-          Analysing your skill gaps...
+      <div className="nexprep-page-head">
+        <div>
+          <p className="nexprep-kicker">Know what to improve next</p>
+          <h2>Skill Gap Analysis</h2>
+          <p>Find the skills that need attention based on your latest completed interview.</p>
         </div>
-      )}
+        <button className="nexprep-refresh" type="button" onClick={loadSkillGap}>
+          Refresh
+        </button>
+      </div>
 
-
-      {/* ----------------------------------------- */}
-      {/* Error state.                              */}
-      {/* ----------------------------------------- */}
-
-      {!loading && error && (
-        <div
-          style={{
-            marginTop: "25px",
-            padding: "16px",
-            borderRadius: "8px",
-            background: "#fee2e2",
-            color: "#991b1b",
-          }}
-        >
-          {error}
+      {loading ? (
+        <div className="nexprep-gap-message" role="status">
+          <h3>Reviewing your skill performance</h3>
+          <p>Loading your latest interview and skill-gap results.</p>
         </div>
-      )}
-
-
-      {/* ----------------------------------------- */}
-      {/* Main skill-gap content.                   */}
-      {/* ----------------------------------------- */}
-
-      {!loading &&
-        !error &&
-        skillGap && (
-
-          <>
-
-            {/* Interview information. */}
-            <div
-              style={{
-                marginTop: "25px",
-                padding: "20px",
-                borderRadius: "12px",
-                background: "#f3f4f6",
-              }}
-            >
-
-              <h3
-                style={{
-                  marginTop: "0",
-                  color: "#111827",
-                }}
-              >
-                Interview Performance
-              </h3>
-
-              <p
-                style={{
-                  color: "#374151",
-                }}
-              >
-                Interview ID: {skillGap.interviewId}
-              </p>
-
-              <p
-                style={{
-                  marginBottom: "0",
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  color: "#111827",
-                }}
-              >
-                Overall Score:{" "}
-                {skillGap.overallScore} / 10
-              </p>
-
+      ) : error ? (
+        <div className="nexprep-gap-message" role="alert">
+          <h3>Skill-gap report unavailable</h3>
+          <p>{error}</p>
+          <button className="nexprep-retry" type="button" onClick={loadSkillGap}>
+            Try again
+          </button>
+        </div>
+      ) : skillGap ? (
+        <>
+          <div className="nexprep-gap-interview">
+            <div>
+              <span>Based on latest completed interview</span>
+              <strong>Interview #{skillGap.interviewId || interviewId}</strong>
             </div>
+            <div>
+              <span>Overall interview score</span>
+              <strong>{skillGap.overallScore ?? "—"} / 10</strong>
+            </div>
+          </div>
 
+          <div className="nexprep-gap-overview">
+            <article className="nexprep-gap-hero">
+              <span className="nexprep-gap-label">Skills evaluated</span>
+              <strong>{categoryScores.length}</strong>
+              <p>Skill areas included in this report</p>
+            </article>
+            <article className="nexprep-gap-stat">
+              <span className="nexprep-gap-label">High-priority gaps</span>
+              <strong>{highGapCount}</strong>
+              <p>Scores below 5/10</p>
+            </article>
+            <article className="nexprep-gap-stat">
+              <span className="nexprep-gap-label">Weak skills flagged</span>
+              <strong>{weakSkills.length}</strong>
+              <p>Identified by the assessment</p>
+            </article>
+          </div>
 
-            {/* ------------------------------------- */}
-            {/* Skill cards.                          */}
-            {/* ------------------------------------- */}
+          <h3 className="nexprep-gap-section-title">Skill-by-skill breakdown</h3>
 
-            <div
-              style={{
-                marginTop: "25px",
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "20px",
-              }}
-            >
+          {categoryScores.length === 0 ? (
+            <div className="nexprep-gap-empty">
+              <h3>No category scores available</h3>
+              <p>This interview does not contain a skill breakdown yet.</p>
+            </div>
+          ) : (
+            <div className="nexprep-gap-grid">
+              {categoryScores.map(([skill, rawScore]) => {
+                const score = Number(rawScore);
+                const validScore = Number.isFinite(score);
+                const safeScore = validScore ? score : 0;
+                const percentage = Math.min(100, Math.max(0, safeScore * 10));
+                const gapClass = getGapClass(safeScore);
+                const isWeak = weakSkills.includes(skill);
 
-              {Object.entries(
-                skillGap.categoryScores || {}
-              ).map(
-                ([skill, score]) => {
-
-                  // Convert score to number.
-                  const numericScore =
-                    Number(score) || 0;
-
-                  // Calculate progress percentage.
-                  const percentage =
-                    Math.min(
-                      Math.max(
-                        numericScore * 10,
-                        0
-                      ),
-                      100
-                    );
-
-
-                  return (
-                    <div
-                      key={skill}
-                      style={{
-                        padding: "22px",
-                        border:
-                          "1px solid #d1d5db",
-                        borderRadius: "12px",
-                        background: "#ffffff",
-                      }}
-                    >
-
-                      {/* Skill name. */}
-                      <h3
-                        style={{
-                          marginTop: "0",
-                          color: "#111827",
-                        }}
-                      >
-                        {skill}
-                      </h3>
-
-
-                      {/* Score. */}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent:
-                            "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-
-                        <span
-                          style={{
-                            color: "#4b5563",
-                          }}
-                        >
-                          Score
-                        </span>
-
-                        <strong
-                          style={{
-                            fontSize: "20px",
-                            color: "#111827",
-                          }}
-                        >
-                          {numericScore} / 10
-                        </strong>
-
-                      </div>
-
-
-                      {/* Progress bar. */}
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "10px",
-                          marginTop: "12px",
-                          background: "#e5e7eb",
-                          borderRadius: "10px",
-                          overflow: "hidden",
-                        }}
-                      >
-
-                        <div
-                          style={{
-                            width:
-                              `${percentage}%`,
-                            height: "100%",
-                            background:
-                              "#6366f1",
-                            borderRadius: "10px",
-                          }}
-                        />
-
-                      </div>
-
-
-                      {/* Gap level. */}
-                      <p
-                        style={{
-                          marginTop: "15px",
-                          marginBottom: "8px",
-                          fontWeight: "700",
-                          color: "#374151",
-                        }}
-                      >
-                        {getGapLevel(
-                          numericScore
-                        )}
-                      </p>
-
-
-                      {/* Gap explanation. */}
-                      <p
-                        style={{
-                          marginTop: "0",
-                          color: "#6b7280",
-                          lineHeight: "1.5",
-                        }}
-                      >
-                        {getGapMessage(
-                          numericScore
-                        )}
-                      </p>
-
-
-                      {/* Weak skill indicator. */}
-                      {(
-                        skillGap.weakSkills ||
-                        []
-                      ).includes(skill) && (
-
-                        <div
-                          style={{
-                            marginTop: "12px",
-                            padding: "8px 10px",
-                            borderRadius: "6px",
-                            background: "#fef2f2",
-                            color: "#991b1b",
-                            fontWeight: "600",
-                          }}
-                        >
-                          Weak Skill
-                        </div>
-
-                      )}
-
+                return (
+                  <article className="nexprep-gap-card" key={skill}>
+                    <div className="nexprep-gap-card-top">
+                      <h3>{skill}</h3>
+                      <span className="nexprep-gap-score">
+                        {validScore ? `${safeScore.toFixed(2)}/10` : "—"}
+                      </span>
                     </div>
-                  );
-                }
-              )}
 
+                    <div className="nexprep-gap-track">
+                      <span style={{ width: `${percentage}%` }} />
+                    </div>
+
+                    <div className="nexprep-gap-card-bottom">
+                      <span className={`nexprep-gap-badge ${gapClass}`}>
+                        {validScore ? getGapLevel(safeScore) : "Not scored"}
+                      </span>
+                      {isWeak && (
+                        <span className="nexprep-gap-badge high">Needs focus</span>
+                      )}
+                    </div>
+
+                    <p>
+                      {validScore
+                        ? getGapMessage(safeScore)
+                        : "A score is not available for this skill yet."}
+                    </p>
+                  </article>
+                );
+              })}
             </div>
-
-          </>
-        )}
-
-    </div>
+          )}
+        </>
+      ) : (
+        <div className="nexprep-gap-empty">
+          <h3>No skill-gap report available</h3>
+          <p>Complete an interview to generate your first skill-gap report.</p>
+        </div>
+      )}
+    </section>
   );
 }
 

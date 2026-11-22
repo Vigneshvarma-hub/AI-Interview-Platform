@@ -927,21 +927,6 @@ export default function TestCenter({
         }`}
         style={standalonePageStyle}
       >
-        <header className="tc-header">
-          <div>
-            <span className="tc-eyebrow">ASSESSMENT CENTER</span>
-            <h1>Test Center</h1>
-            <p>
-              Test your knowledge, track your performance, and identify
-              skill gaps.
-            </p>
-          </div>
-
-          <div className="tc-header-icon" aria-hidden="true">
-            ✓
-          </div>
-        </header>
-
         <div className="tc-setup-grid">
           <form className="tc-card tc-setup-form" onSubmit={startTest}>
             <h2>Configure your test</h2>

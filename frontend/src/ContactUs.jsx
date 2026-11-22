@@ -1,9 +1,7 @@
-
 import { useState } from "react";
 import "./ContactUs.css";
 
 export default function ContactUs() {
-  // Store all contact form fields in one state object.
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -14,7 +12,6 @@ export default function ContactUs() {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
-  // Update the field that the user edits.
   function handleChange(event) {
     const { name, value } = event.target;
 
@@ -24,7 +21,6 @@ export default function ContactUs() {
     }));
   }
 
-  // Submit the form to the Spring Boot backend.
   async function handleSubmit(event) {
     event.preventDefault();
     setLoading(true);
@@ -52,7 +48,6 @@ export default function ContactUs() {
         text: result.message || "Your message has been received.",
       });
 
-      // Clear the form after successful submission.
       setFormData({
         name: "",
         email: "",
@@ -75,90 +70,132 @@ export default function ContactUs() {
     <section className="contact-us" id="contact">
       <div className="contact-us-container">
         <div className="contact-us-heading">
-          <span className="contact-us-label">GET IN TOUCH</span>
-          <h2>Contact Us</h2>
+          <span className="contact-us-label">WE'RE HERE TO HELP</span>
+          <h2>Let’s talk.</h2>
           <p>
-            Have a question about NexPrep AI? Send us a message and
-            we will get back to you.
+            Have a question about NexPrep AI? Tell us what you need and our
+            team will get back to you.
           </p>
         </div>
 
-        <form className="contact-us-form" onSubmit={handleSubmit}>
-          <div className="contact-us-field">
-            <label htmlFor="contact-name">Full Name</label>
-            <input
-              id="contact-name"
-              name="name"
-              type="text"
-              placeholder="Enter your full name"
-              value={formData.name}
-              onChange={handleChange}
-              maxLength={100}
-              autoComplete="name"
-              required
-            />
-          </div>
-
-          <div className="contact-us-field">
-            <label htmlFor="contact-email">Email Address</label>
-            <input
-              id="contact-email"
-              name="email"
-              type="email"
-              placeholder="you@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              maxLength={150}
-              autoComplete="email"
-              required
-            />
-          </div>
-
-          <div className="contact-us-field">
-            <label htmlFor="contact-subject">Subject</label>
-            <input
-              id="contact-subject"
-              name="subject"
-              type="text"
-              placeholder="How can we help?"
-              value={formData.subject}
-              onChange={handleChange}
-              maxLength={200}
-              required
-            />
-          </div>
-
-          <div className="contact-us-field">
-            <label htmlFor="contact-message">Message</label>
-            <textarea
-              id="contact-message"
-              name="message"
-              placeholder="Write your message here..."
-              value={formData.message}
-              onChange={handleChange}
-              maxLength={5000}
-              rows={5}
-              required
-            />
-          </div>
-
-          {feedback && (
-            <p
-              className={`contact-us-feedback ${feedback.type}`}
-              role="status"
-            >
-              {feedback.text}
+        <div className="contact-us-layout">
+          <aside className="contact-us-intro">
+            <div className="contact-us-orb" aria-hidden="true">
+              <span>✦</span>
+            </div>
+            <p className="contact-us-eyebrow">NEXPREP AI SUPPORT</p>
+            <h3>Every great career move starts with a conversation.</h3>
+            <p className="contact-us-intro-copy">
+              Share your question, feedback, or issue. We’re listening.
             </p>
-          )}
+            <div className="contact-us-points">
+              <div className="contact-us-point">
+                <span className="contact-us-point-icon">✉</span>
+                <span>
+                  <strong>Questions & feedback</strong>
+                  <small>We value what you have to say.</small>
+                </span>
+              </div>
+              <div className="contact-us-point">
+                <span className="contact-us-point-icon">↗</span>
+                <span>
+                  <strong>Product support</strong>
+                  <small>Tell us where you need a hand.</small>
+                </span>
+              </div>
+            </div>
+          </aside>
 
-          <button
-            className="contact-us-submit"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "Sending..." : "Send Message"}
-          </button>
-        </form>
+          <form className="contact-us-form" onSubmit={handleSubmit}>
+            <div className="contact-us-form-heading">
+              <h3>Send us a message</h3>
+              <p>Fill in the details below and we’ll take it from there.</p>
+            </div>
+
+            <div className="contact-us-field">
+              <label htmlFor="contact-name">Full name</label>
+              <input
+                id="contact-name"
+                name="name"
+                type="text"
+                placeholder="Enter your full name"
+                value={formData.name}
+                onChange={handleChange}
+                maxLength={100}
+                autoComplete="name"
+                required
+              />
+            </div>
+
+            <div className="contact-us-field">
+              <label htmlFor="contact-email">Email address</label>
+              <input
+                id="contact-email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                value={formData.email}
+                onChange={handleChange}
+                maxLength={150}
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div className="contact-us-field">
+              <label htmlFor="contact-subject">Subject</label>
+              <input
+                id="contact-subject"
+                name="subject"
+                type="text"
+                placeholder="What can we help you with?"
+                value={formData.subject}
+                onChange={handleChange}
+                maxLength={200}
+                required
+              />
+            </div>
+
+            <div className="contact-us-field">
+              <label htmlFor="contact-message">Message</label>
+              <textarea
+                id="contact-message"
+                name="message"
+                placeholder="Add a few details so we can help..."
+                value={formData.message}
+                onChange={handleChange}
+                maxLength={5000}
+                rows={5}
+                required
+              />
+              <span className="contact-us-character-count">
+                {formData.message.length}/5000
+              </span>
+            </div>
+
+            {feedback && (
+              <p
+                className={`contact-us-feedback ${feedback.type}`}
+                role="status"
+                aria-live="polite"
+              >
+                {feedback.text}
+              </p>
+            )}
+
+            <button
+              className="contact-us-submit"
+              type="submit"
+              disabled={loading}
+            >
+              <span>{loading ? "Sending your message..." : "Send message"}</span>
+              {!loading && <span aria-hidden="true">↗</span>}
+            </button>
+            <p className="contact-us-privacy">
+              Your details are used only to respond to your message.
+            </p>
+          </form>
+        </div>
       </div>
     </section>
   );

@@ -1,248 +1,303 @@
+
 import { useState } from "react";
 
 function StartInterview() {
-  // Selected technology
-  const [technology, setTechnology] = useState("Java");
 
-  // Selected difficulty
-  const [difficulty, setDifficulty] = useState("Easy");
-
-  // API loading state
+  // API loading state.
   const [loading, setLoading] = useState(false);
 
-  // Error message
+  // Error message.
   const [error, setError] = useState("");
 
-  // Successful interview response
+  // Successful interview response.
   const [interview, setInterview] = useState(null);
 
-  // Get JWT token from browser localStorage
+  // Retrieve JWT token.
   function getToken() {
+
     const token = localStorage.getItem("token");
 
-    // Token not available
     if (!token) {
       return null;
     }
 
-    // If token already contains Bearer prefix, remove it
-    if (token.startsWith("Bearer ")) {
-      return token.substring(7);
-    }
-
-    return token;
+    return token.startsWith("Bearer ")
+      ? token.substring(7)
+      : token;
   }
 
-  // Start interview API call
+  // Start resume-based AI interview.
   async function handleStartInterview(event) {
-    // Prevent page refresh
+
     event.preventDefault();
 
-    // Clear previous state
     setLoading(true);
     setError("");
     setInterview(null);
 
     try {
-      // Retrieve JWT token
+
+      // 1. Retrieve authentication token.
       const token = getToken();
 
-      // Stop if token is missing
       if (!token) {
-        throw new Error("JWT token not found. Please login again.");
+        throw new Error(
+          "JWT token not found. Please login again."
+        );
       }
 
-      // Send request to backend
+      // 2. Call the correct AI interview endpoint.
       const response = await fetch(
-        "http://localhost:8080/api/interviews/start",
+        "http://localhost:8080/api/ai-interviews/start",
         {
           method: "POST",
 
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-
-            // Send JWT token to backend
             Authorization: `Bearer ${token}`,
           },
 
-          // Request body
-          body: JSON.stringify({
-            technology: technology,
-            difficulty: difficulty,
-          }),
+          // The backend generates technology and difficulty
+          // from the uploaded resume.
+          body: JSON.stringify({}),
         }
       );
 
-      // Read response as text first
+      // 3. Read response.
       const responseText = await response.text();
 
-      // Console logs for debugging
-      console.log("Start Interview status:", response.status);
-      console.log("Start Interview response:", responseText);
+      console.log(
+        "AI Interview Status:",
+        response.status
+      );
 
-      // Handle unauthorized request
-      if (response.status === 401) {
-        throw new Error(
-          "401 Unauthorized: Please logout and login again."
-        );
-      }
+      console.log(
+        "AI Interview Response:",
+        responseText
+      );
 
-      // Handle forbidden request
-      if (response.status === 403) {
-        throw new Error(
-          "403 Forbidden: Backend rejected your role or JWT token. " +
-            "Check backend logs and user role."
-        );
-      }
-
-      // Handle empty response
       if (!responseText.trim()) {
         throw new Error(
-          `Backend returned an empty response. HTTP status: ${response.status}`
+          `Empty backend response. Status: ${response.status}`
         );
       }
 
-      // Convert response text into JSON
+      // 4. Parse JSON.
       let data;
 
       try {
         data = JSON.parse(responseText);
-      } catch (jsonError) {
+      } catch {
         throw new Error(
-          `Backend returned invalid JSON response: ${responseText}`
+          "Backend returned an invalid JSON response."
         );
       }
 
-      // Handle other unsuccessful responses
+      // 5. Handle authentication errors.
+      if (response.status === 401) {
+        throw new Error(
+          "Session expired. Please login again."
+        );
+      }
+
+      // 6. Handle subscription and permission errors.
+      if (response.status === 403) {
+        throw new Error(
+          data.message ||
+          "You are not allowed to start this interview."
+        );
+      }
+
+      // 7. Handle other unsuccessful responses.
       if (!response.ok) {
         throw new Error(
           data.message ||
-            data.error ||
-            `Unable to start interview. HTTP status: ${response.status}`
+          data.error ||
+          "Unable to start AI interview."
         );
       }
 
-      // Save successful interview response
+      // 8. Validate the response.
+      if (!data.interviewId || !data.question) {
+        throw new Error(
+          "Interview started, but the backend returned incomplete interview details."
+        );
+      }
+
+      // 9. Save interview details.
       setInterview(data);
 
-      console.log("Interview started successfully:", data);
-    } catch (err) {
-      // Print error in browser console
-      console.error("Start interview error:", err);
+      console.log(
+        "AI Interview Started Successfully:",
+        data
+      );
 
-      // Display error in UI
-      setError(err.message);
+    } catch (err) {
+
+      console.error(
+        "AI Interview Error:",
+        err
+      );
+
+      setError(
+        err.message ||
+        "Something went wrong. Please try again."
+      );
+
     } finally {
-      // Stop loading
+
       setLoading(false);
+
     }
   }
 
   return (
     <div className="card">
-      {/* Page heading */}
-      <h2>Start New Interview</h2>
 
-      {/* Page description */}
+      {/* Page heading */}
+      <h2>Start AI Mock Interview</h2>
+
       <p>
-        Select your technology and difficulty level to begin the interview.
+        Start a personalized technical interview
+        based on your uploaded resume.
       </p>
+
+      {/* Interview information */}
+      <div
+        style={{
+          padding: "15px",
+          background: "#f3f4f6",
+          borderRadius: "10px",
+          marginBottom: "20px",
+          color: "#333",
+        }}
+      >
+        <h4>Before you begin</h4>
+
+        <ul>
+          <li>Upload your resume before starting.</li>
+          <li>AI analyzes your technical skills and projects.</li>
+          <li>Questions are generated dynamically.</li>
+          <li>Follow-up questions depend on your answers.</li>
+          <li>Your interview performance is evaluated.</li>
+        </ul>
+      </div>
 
       {/* Start interview form */}
       <form onSubmit={handleStartInterview}>
-        {/* Technology selection */}
-        <div className="form-group">
-          <label htmlFor="technology">Technology</label>
 
-          <select
-            id="technology"
-            value={technology}
-            onChange={(event) => setTechnology(event.target.value)}
-          >
-            <option value="Java">Java</option>
-            <option value="Spring Boot">Spring Boot</option>
-            <option value="Python">Python</option>
-            <option value="JavaScript">JavaScript</option>
-            <option value="SQL">SQL</option>
-          </select>
-        </div>
-
-        {/* Difficulty selection */}
-        <div className="form-group">
-          <label htmlFor="difficulty">Difficulty</label>
-
-          <select
-            id="difficulty"
-            value={difficulty}
-            onChange={(event) => setDifficulty(event.target.value)}
-          >
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-        </div>
-
-        {/* Submit button */}
         <button
           type="submit"
           className="primary-button"
           disabled={loading}
         >
-          {loading ? "Starting Interview..." : "Start Interview"}
+          {loading
+            ? "Preparing Your AI Interview..."
+            : "Start AI Interview"}
         </button>
+
       </form>
 
-      {/* Display error message */}
-      {error && (
-        <p
-          style={{
-            color: "red",
-            marginTop: "20px",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          Error: {error}
+      {/* Loading message */}
+      {loading && (
+        <p style={{ marginTop: "15px" }}>
+          AI is analyzing your resume and preparing
+          your first interview question...
         </p>
       )}
 
-      {/* Display successful interview details */}
-      {interview && (
-        <div style={{ marginTop: "25px" }}>
-          <h3>Interview Started Successfully</h3>
-
-          <p>
-            <strong>Interview ID:</strong> {interview.id}
-          </p>
-
-          <p>
-            <strong>Technology:</strong> {interview.technology}
-          </p>
-
-          <p>
-            <strong>Difficulty:</strong> {interview.difficulty}
-          </p>
-
-          <p>
-            <strong>Status:</strong> {interview.status}
-          </p>
-
-          <h3>Questions</h3>
-
-          {interview.questions &&
-          interview.questions.length > 0 ? (
-            <ol>
-              {interview.questions.map((question) => (
-                <li key={question.id}>
-                  {question.questionText}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>No questions available.</p>
-          )}
+      {/* Error message */}
+      {error && (
+        <div
+          style={{
+            marginTop: "20px",
+            padding: "15px",
+            background: "#fee2e2",
+            color: "#991b1b",
+            borderRadius: "8px",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          <strong>Interview Error</strong>
+          <p>{error}</p>
         </div>
       )}
+
+      {/* Successful interview */}
+      {interview && (
+        <div
+          style={{
+            marginTop: "25px",
+            padding: "20px",
+            border: "1px solid #ddd",
+            borderRadius: "12px",
+          }}
+        >
+
+          <h3>AI Interview Started Successfully!</h3>
+
+          <p>
+            <strong>Interview ID:</strong>{" "}
+            {interview.interviewId}
+          </p>
+
+          <p>
+            <strong>Technology:</strong>{" "}
+            {interview.technology}
+          </p>
+
+          <p>
+            <strong>Difficulty:</strong>{" "}
+            {interview.difficulty}
+          </p>
+
+          <p>
+            <strong>Question:</strong>{" "}
+            {interview.questionNumber}
+          </p>
+
+          <p>
+            <strong>Question Limit:</strong>{" "}
+            {interview.totalQuestions}
+          </p>
+
+          <hr />
+
+          <h3>Your First Interview Question</h3>
+
+          <div
+            style={{
+              background: "#eff6ff",
+              padding: "20px",
+              borderRadius: "10px",
+              marginTop: "15px",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "18px",
+                fontWeight: "600",
+                lineHeight: "1.6",
+              }}
+            >
+              {interview.question}
+            </p>
+          </div>
+
+          <p
+            style={{
+              color: "#15803d",
+              marginTop: "15px",
+            }}
+          >
+            Your personalized interview has been
+            successfully created.
+          </p>
+
+        </div>
+      )}
+
     </div>
   );
 }

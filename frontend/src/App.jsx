@@ -86,9 +86,9 @@ function LandingPage({ onSignIn, onSignUp }) {
             window.scrollTo({ top: 0, behavior: "smooth" })
           }
         >
-          <span className="brand-mark">AI</span>
+          <span className="brand-mark">N</span>
           <span>
-            Interview<span className="brand-purple">Pro</span>
+            NexPrep<span className="brand-purple"> AI</span>
           </span>
         </button>
 
@@ -320,13 +320,13 @@ function LandingPage({ onSignIn, onSignUp }) {
             window.scrollTo({ top: 0, behavior: "smooth" })
           }
         >
-          <span className="brand-mark">AI</span>
+          <span className="brand-mark">N</span>
           <span>
-            Interview<span className="brand-purple">Pro</span>
+            NexPrep<span className="brand-purple"> AI</span>
           </span>
         </button>
-        <p>Practice • Improve • Succeed</p>
-        <span>© {new Date().getFullYear()} AI Interview Platform</span>
+        <p>Prepare Smarter. Interview Better.</p>
+        <span>© {new Date().getFullYear()} NexPrep AI</span>
       </footer>
       <Chatbot />
     </div>
@@ -349,6 +349,7 @@ function App() {
       ? "Admin Dashboard"
       : "Dashboard"
   );
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const [dashboardData, setDashboardData] = useState(null);
   const [adminData, setAdminData] = useState(null);
@@ -358,12 +359,15 @@ function App() {
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessmentError, setAssessmentError] = useState("");
 
-  // Simplified navigation for regular users.
+  // Horizontal navigation keeps each preparation workflow separate.
   const userMenuItems = [
     { label: "Dashboard", icon: "⌂" },
-    { label: "Test Center", icon: "📝" },
+    { label: "Resume & Skills", icon: "▤" },
+    { label: "Assessments", icon: "✓" },
+    { label: "Interview Tests", icon: "◷" },
+    { label: "Test Center", icon: "▣" },
     { label: "AI Interview", icon: "◎" },
-    { label: "Subscription & Plans", icon: "♛" },
+    { label: "Reports", icon: "↗" },
   ];
 
   const adminMenuItems = [
@@ -566,27 +570,42 @@ function App() {
     );
   }
 
-  // Public visitors see the landing page. Login.jsx is used for sign-in/register.
+  // Public visitors stay on the landing page; authentication opens as an overlay.
   if (!isAuthenticated) {
-    if (!showAuth) {
-      return <LandingPage onSignIn={openSignIn} onSignUp={openSignUp} />;
-    }
-
     return (
-      <div className="auth-screen">
-        <button
-          className="auth-back-button"
-          onClick={() => setShowAuth(false)}
-          type="button"
-        >
-          ← Back to home
-        </button>
-        <Login
-          onLoginSuccess={handleLoginSuccess}
-          initialMode={authMode}
-        />
+      <>
+        <LandingPage onSignIn={openSignIn} onSignUp={openSignUp} />
+        {showAuth && (
+          <div
+            className="auth-modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setShowAuth(false);
+            }}
+          >
+            <section
+              className="auth-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={authMode === "register" ? "Create your NexPrep AI account" : "Sign in to NexPrep AI"}
+            >
+              <button
+                className="auth-modal-close"
+                type="button"
+                onClick={() => setShowAuth(false)}
+                aria-label="Close authentication dialog"
+              >
+                ×
+              </button>
+              <Login
+                onLoginSuccess={handleLoginSuccess}
+                initialMode={authMode}
+              />
+            </section>
+          </div>
+        )}
         <Chatbot />
-      </div>
+      </>
     );
   }
 
@@ -623,53 +642,99 @@ function App() {
 
   return (
     <div className="dashboard">
-      <aside className="sidebar">
-        <div className="logo">
-          <span>AI</span>
-          <span className="logo-accent">Interview</span>
-        </div>
-        <div className="sidebar-caption">INTERVIEW PREPARATION</div>
+      <header className="app-navbar">
+        <button
+          className="logo app-navbar-brand"
+          type="button"
+          onClick={() => setActiveMenu(userRole === "ADMIN" ? "Admin Dashboard" : "Dashboard")}
+          aria-label="Go to dashboard"
+        >
+          <span className="brand-mark">N</span>
+          <span>NexPrep <span className="logo-accent">AI</span></span>
+        </button>
 
-        <nav className="sidebar-menu">
+        <nav className="sidebar-menu horizontal-nav" aria-label="Application navigation">
           {menuItems.map((item) => (
             <button
               key={item.label}
-              className={`menu-item ${
+              type="button"
+              className={`menu-item horizontal-menu-item ${
                 activeMenu === item.label ? "active" : ""
               }`}
-              onClick={() => setActiveMenu(item.label)}
+              onClick={() => {
+                setActiveMenu(item.label);
+                setProfileMenuOpen(false);
+              }}
+              aria-current={activeMenu === item.label ? "page" : undefined}
             >
               <span className="menu-icon">{item.icon}</span>
               <span>{item.label}</span>
-              {activeMenu === item.label && (
-                <span className="menu-indicator" />
-              )}
+              {activeMenu === item.label && <span className="menu-indicator" />}
             </button>
           ))}
         </nav>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
+        <div className="navbar-profile-area">
+          <button
+            type="button"
+            className="profile-chip profile-menu-trigger"
+            onClick={() => setProfileMenuOpen((open) => !open)}
+            aria-expanded={profileMenuOpen}
+            aria-haspopup="menu"
+          >
             <div className="avatar">
               {(userName || "U").charAt(0).toUpperCase()}
             </div>
-            <div className="sidebar-user-info">
+            <div className="profile-chip-copy">
               <strong>{userName || "User"}</strong>
-              <span>
-                {userRole === "ADMIN" ? "Administrator" : "Candidate"}
-              </span>
+              <span>{userRole === "ADMIN" ? "Admin" : "Candidate"}</span>
             </div>
-          </div>
-          <button className="logout-button" onClick={handleLogout}>
-            <span>↪</span> Logout
+            <span className="profile-chevron">⌄</span>
           </button>
+
+          {profileMenuOpen && (
+            <div className="profile-dropdown" role="menu">
+              <div className="profile-dropdown-heading">
+                <strong>{userName || "User"}</strong>
+                <span>{localStorage.getItem("userEmail") || "Signed in"}</span>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setActiveMenu("Subscription & Plans");
+                  setProfileMenuOpen(false);
+                }}
+              >
+                <span>♛</span> Subscription & Plans
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setActiveMenu(userRole === "ADMIN" ? "Admin Dashboard" : "Dashboard");
+                  setProfileMenuOpen(false);
+                }}
+              >
+                <span>⌂</span> Dashboard
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="profile-logout"
+                onClick={handleLogout}
+              >
+                <span>↪</span> Logout
+              </button>
+            </div>
+          )}
         </div>
-      </aside>
+      </header>
 
       <main className="main-content">
         <header className="topbar">
           <div className="topbar-heading">
-            <p className="eyebrow">AI INTERVIEW & SKILL ASSESSMENT</p>
+            <p className="eyebrow">NEXPREP AI • INTERVIEW & SKILL ASSESSMENT</p>
             <h1>
               {activeMenu === "Dashboard"
                 ? `Good to see you, ${userName || "Candidate"}`
@@ -682,19 +747,6 @@ function App() {
                   ? "Track your progress and prepare for your next interview."
                   : `Manage your ${activeMenu.toLowerCase()} activities.`}
             </p>
-          </div>
-          <div className="topbar-actions">
-            <div className="profile-chip">
-              <div className="avatar">
-                {(userName || "U").charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <strong>{userName || "User"}</strong>
-                <span>
-                  {userRole === "ADMIN" ? "Admin" : "Candidate"}
-                </span>
-              </div>
-            </div>
           </div>
         </header>
 
@@ -885,184 +937,82 @@ function App() {
           </section>
         )}
 
-        {/* User dashboard */}
+        {/* Candidate dashboard — focused overview with real API data only. */}
         {userRole !== "ADMIN" && activeMenu === "Dashboard" && (
-          <>
-            <section className="stats-grid">
-              <StatCard
-                icon="▤"
-                title="Total Interviews"
-                value={totalInterviews}
-                subtitle="All interviews"
-              />
-              <StatCard
-                icon="★"
-                title="Average Score"
-                value={averageScore}
-                subtitle="Overall performance"
-              />
-              <StatCard
-                icon="◎"
-                title="Skills Evaluated"
-                value={Object.keys(categoryScores).length}
-                subtitle="Skill areas"
-              />
-              <StatCard
-                icon="↗"
-                title="Weak Skills"
-                value={weakSkills.length}
-                subtitle="Needs improvement"
-              />
-            </section>
-
-            <section className="welcome-banner">
-              <div className="welcome-banner-content">
-                <span className="banner-label">YOUR CAREER JOURNEY</span>
-                <h2>Build confidence. Ace your next interview.</h2>
-                <p>
-                  Practice interviews, evaluate your skills, and discover
-                  where you can improve.
-                </p>
+          <section className="candidate-dashboard">
+            <div className="candidate-welcome">
+              <div className="candidate-welcome-copy">
+                <span className="candidate-kicker">YOUR PREPARATION OVERVIEW</span>
+                <h2>Make every practice session count.</h2>
+                <p>Review your performance, identify what needs work, and take the next step toward your goal.</p>
               </div>
-              <button
-                className="banner-button"
-                onClick={() => setActiveMenu("Test Center")}
-              >
-                Start an Interview <span>→</span>
+              <button className="candidate-primary-action" onClick={() => setActiveMenu("Test Center")}>
+                <span>Start practising</span><span aria-hidden="true">→</span>
               </button>
-            </section>
+              <div className="candidate-orb candidate-orb-one" />
+              <div className="candidate-orb candidate-orb-two" />
+            </div>
 
-            <section className="content-grid">
-              <div className="card performance-card">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">YOUR PROGRESS</p>
-                    <h2>Skill Performance</h2>
-                  </div>
-                  <span className="section-icon">▥</span>
-                </div>
+            <div className="candidate-stats-grid">
+              <article className="candidate-stat-card stat-violet">
+                <div className="candidate-stat-top"><span className="candidate-stat-icon">▤</span><span className="candidate-stat-label">INTERVIEW ATTEMPTS</span></div>
+                <strong>{totalInterviews}</strong><span className="candidate-stat-note">Completed interview activity</span>
+              </article>
+              <article className="candidate-stat-card stat-blue">
+                <div className="candidate-stat-top"><span className="candidate-stat-icon">★</span><span className="candidate-stat-label">AVERAGE SCORE</span></div>
+                <strong>{averageScore}<small> / 10</small></strong><span className="candidate-stat-note">Across your recorded interviews</span>
+              </article>
+              <article className="candidate-stat-card stat-cyan">
+                <div className="candidate-stat-top"><span className="candidate-stat-icon">◎</span><span className="candidate-stat-label">SKILLS EVALUATED</span></div>
+                <strong>{Object.keys(categoryScores).length}</strong><span className="candidate-stat-note">Skill areas with recorded scores</span>
+              </article>
+              <article className="candidate-stat-card stat-rose">
+                <div className="candidate-stat-top"><span className="candidate-stat-icon">↗</span><span className="candidate-stat-label">SKILL GAPS</span></div>
+                <strong>{weakSkills.length}</strong><span className="candidate-stat-note">Areas flagged for improvement</span>
+              </article>
+            </div>
 
+            <div className="candidate-section-heading">
+              <div><span className="candidate-kicker">YOUR PERFORMANCE</span><h2>Progress at a glance</h2></div>
+              <button className="candidate-text-action" onClick={() => setActiveMenu("Reports")}>View reports <span aria-hidden="true">→</span></button>
+            </div>
+
+            <div className="candidate-panels-grid">
+              <section className="candidate-panel candidate-performance-panel">
+                <div className="candidate-panel-heading"><div><h3>Skill performance</h3><p>Your latest recorded category scores</p></div><span className="candidate-panel-symbol">▥</span></div>
                 {Object.entries(categoryScores).length ? (
-                  <div className="skill-performance-list">
-                    {Object.entries(categoryScores).map(
-                      ([category, score]) => {
-                        const percentage = Math.min(
-                          100,
-                          Math.max(0, Number(score) * 10)
-                        );
-
-                        return (
-                          <div className="progress-item" key={category}>
-                            <div className="progress-header">
-                              <span>{category}</span>
-                              <strong>{percentage.toFixed(1)}%</strong>
-                            </div>
-                            <div className="progress-bar">
-                              <div
-                                className="progress-fill"
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      }
-                    )}
+                  <div className="candidate-skill-list">
+                    {Object.entries(categoryScores).map(([category, score]) => {
+                      const percentage = Math.min(100, Math.max(0, Number(score) * 10));
+                      return <div className="candidate-skill-row" key={category}><div className="candidate-skill-meta"><span>{category}</span><strong>{percentage.toFixed(1)}%</strong></div><div className="candidate-skill-track"><span style={{ width: `${percentage}%` }} /></div></div>;
+                    })}
                   </div>
                 ) : (
-                  <div className="empty-state">
-                    <div className="empty-state-icon">▥</div>
-                    <h3>Your skill journey starts here</h3>
-                    <p>
-                      Complete an interview to see your skill performance and
-                      progress.
-                    </p>
-                  </div>
+                  <div className="candidate-empty-state"><span>✦</span><strong>Your skill insights will appear here</strong><p>Complete an interview to see scores for your evaluated skill areas.</p></div>
                 )}
+                <button className="candidate-outline-action" onClick={() => setActiveMenu("Resume & Skills")}>Explore skill analysis <span aria-hidden="true">→</span></button>
+              </section>
 
-                <button
-                  className="primary-button"
-                  onClick={() => setActiveMenu("Test Center")}
-                >
-                  Start New Interview <span>→</span>
-                </button>
-              </div>
-
-              <div className="card weak-skills-card">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">IMPROVE YOUR SKILLS</p>
-                    <h2>Weak Skills</h2>
-                  </div>
-                  <span className="section-icon">↗</span>
-                </div>
-
+              <section className="candidate-panel candidate-gaps-panel">
+                <div className="candidate-panel-heading"><div><h3>Focus areas</h3><p>Skills identified as needing attention</p></div><span className="candidate-panel-symbol">✧</span></div>
                 {weakSkills.length ? (
-                  <ul className="skill-list">
-                    {weakSkills.map((skill) => (
-                      <li key={skill}>
-                        <span className="skill-dot" />
-                        {skill}
-                      </li>
-                    ))}
-                  </ul>
+                  <ul className="candidate-gap-list">{weakSkills.slice(0, 5).map((skill) => <li key={skill}><span className="candidate-gap-dot" />{skill}</li>)}</ul>
                 ) : (
-                  <div className="empty-state compact">
-                    <div className="empty-state-icon">✓</div>
-                    <h3>No weak skills found</h3>
-                    <p>
-                      Complete an interview to identify areas for improvement.
-                    </p>
-                  </div>
+                  <div className="candidate-empty-state"><span>✓</span><strong>No skill gaps are currently listed</strong><p>Keep practising. New insights appear as you complete interviews.</p></div>
                 )}
+                <button className="candidate-outline-action" onClick={() => setActiveMenu("Reports")}>Review recommendations <span aria-hidden="true">→</span></button>
+              </section>
+            </div>
 
-                <button
-                  className="secondary-button"
-                  onClick={() => setActiveMenu("Recommendations")}
-                >
-                  View Recommendations <span>→</span>
-                </button>
+            <section className="candidate-next-step">
+              <div><span className="candidate-kicker">WHAT WOULD YOU LIKE TO DO NEXT?</span><h3>Keep your momentum going.</h3><p>Choose a focused activity and continue preparing.</p></div>
+              <div className="candidate-action-list">
+                <button onClick={() => setActiveMenu("Test Center")}><span className="candidate-action-icon">⌘</span><span><strong>Take an assessment</strong><small>Test your technical knowledge</small></span><b>→</b></button>
+                <button onClick={() => setActiveMenu("AI Interview")}><span className="candidate-action-icon">✦</span><span><strong>Start an AI interview</strong><small>Practise answering interview questions</small></span><b>→</b></button>
+                <button onClick={() => setActiveMenu("Interview Tests")}><span className="candidate-action-icon">◷</span><span><strong>Review interview tests</strong><small>Revisit your previous attempts</small></span><b>→</b></button>
               </div>
             </section>
-
-            <section className="quick-actions-section">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">KEEP LEARNING</p>
-                  <h2>Quick Actions</h2>
-                </div>
-              </div>
-
-              <div className="quick-actions-grid">
-                <button
-                  className="quick-action-card"
-                  onClick={() => setActiveMenu("Test Center")}
-                >
-                  <span className="quick-action-icon">✦</span>
-                  <strong>Start Interview</strong>
-                  <span>Practice your interview skills</span>
-                  <span className="action-arrow">→</span>
-                </button>
-                <button
-                  className="quick-action-card"
-                  onClick={() => setActiveMenu("Assessment History")}
-                >
-                  <span className="quick-action-icon">◷</span>
-                  <strong>Assessment History</strong>
-                  <span>Review your past assessments</span>
-                  <span className="action-arrow">→</span>
-                </button>
-                <button
-                  className="quick-action-card"
-                  onClick={() => setActiveMenu("Skill Analysis")}
-                >
-                  <span className="quick-action-icon">▥</span>
-                  <strong>Skill Analysis</strong>
-                  <span>Understand your strengths</span>
-                  <span className="action-arrow">→</span>
-                </button>
-              </div>
-            </section>
-          </>
+          </section>
         )}
 
         {/* Subscription and free-trial management for regular users. */}
@@ -1079,14 +1029,28 @@ function App() {
             <StartInterview />
           </section>
         )}
-        {userRole !== "ADMIN" && activeMenu === "My Interviews" && (
+        {userRole !== "ADMIN" && activeMenu === "Interview Tests" && (
           <section className="module-container">
             <MyInterviews />
           </section>
         )}
-        {userRole !== "ADMIN" && activeMenu === "Assessment History" && (
+        {userRole !== "ADMIN" && activeMenu === "Assessments" && (
           <section className="module-container">
             <AssessmentHistory />
+          </section>
+        )}
+        {userRole !== "ADMIN" && activeMenu === "Resume & Skills" && (
+          <section className="module-container">
+            <SkillAnalysis />
+          </section>
+        )}
+        {userRole !== "ADMIN" && activeMenu === "Reports" && (
+          <section className="module-container">
+            <div className="reports-grid">
+              <SkillScore />
+              <SkillGap />
+              <Recommendations />
+            </div>
           </section>
         )}
         {userRole !== "ADMIN" && activeMenu === "Test Center" && (
@@ -1123,8 +1087,8 @@ function App() {
         )}
 
         <footer className="dashboard-footer">
-          <span>AI Interview & Skill Assessment Platform</span>
-          <span>Practice • Improve • Succeed</span>
+          <span>NexPrep AI • AI-Powered Interview & Skill Assessment</span>
+          <span>Prepare Smarter. Interview Better.</span>
         </footer>
       </main>
       <Chatbot />

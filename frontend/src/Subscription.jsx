@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import "./Subscription.css";
 
@@ -130,9 +129,13 @@ export default function Subscription() {
   return (
     <section className="subscription-page">
       <div className="subscription-heading">
-        <p className="subscription-eyebrow">YOUR MEMBERSHIP</p>
-        <h2>Subscription & Plans</h2>
-        <p>Manage your plan and explore Premium interview preparation.</p>
+        <p className="subscription-eyebrow">NEXPREP AI MEMBERSHIP</p>
+        <h1 className="subscription-brand-title">NexPrep AI</h1>
+        <p className="subscription-brand-tagline">
+          Prepare Smarter. Interview Better.
+        </p>
+        <h2>Subscription &amp; Plans</h2>
+        <p>Choose the preparation experience that supports your next career step.</p>
       </div>
 
       {error && (
