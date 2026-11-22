@@ -1,3 +1,6 @@
+<img width="1920" height="1080" alt="Screenshot (1791)" src="https://github.com/user-attachments/assets/3806798b-6e5a-4dfe-b2e2-9f641bb6bccb" />
+<img width="1920" height="1080" alt="Screenshot (1405)" src="https://github.com/user-attachments/assets/41090deb-950e-47a8-a482-9c9dd0383080" />
+<img width="1920" height="1080" alt="Screenshot (1787)" src="https://github.com/user-attachments/assets/8baadc94-b246-4174-a0eb-84afa1232371" />
 # NexPrep AI
 ### AI Interview & Skill Assessment Platform
 
