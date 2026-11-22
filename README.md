@@ -1,7 +1,7 @@
 <img width="1920" height="940" alt="Main Dashbaord" src="https://github.com/user-attachments/assets/e4034099-da87-4da6-9442-99a8e1befa87" />
-<img width="1920" height="933" alt="Dashboard" src="https://github.com/user-attachments/assets/beef4941-a36e-4525-a63a-2cef9492b2b8" />
 <img width="1920" height="945" alt="Register Page" src="https://github.com/user-attachments/assets/fa24d3e5-3773-4f3f-90ce-36637a0cd6e3" />
 <img width="1920" height="936" alt="Login page" src="https://github.com/user-attachments/assets/e5502d97-3dcd-4040-be59-b9392f8771d1" />
+<img width="1920" height="933" alt="Dashboard" src="https://github.com/user-attachments/assets/beef4941-a36e-4525-a63a-2cef9492b2b8" />
 <img width="1920" height="940" alt="Test Center Page" src="https://github.com/user-attachments/assets/095aa503-042d-4078-a9fc-b3f8af26175e" />
 <img width="1920" height="937" alt="Interview Start Page" src="https://github.com/user-attachments/assets/e48dfd9a-21af-472c-ab1f-01d3aedd4f53" />
 <img width="1920" height="1080" alt="AI INterview" src="https://github.com/user-attachments/assets/3d53dd86-d877-4fa2-af99-98e7bda26c94" />
